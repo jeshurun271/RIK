@@ -8,6 +8,49 @@
 // ==========================================
 
 let activeCommand = null;
+// ==========================================
+// RIK HAPTICS
+// ==========================================
+
+let hapticInterval = null;
+
+function startHaptics() {
+
+    if (!("vibrate" in navigator)) {
+        return;
+    }
+
+    if (hapticInterval !== null) {
+        return;
+    }
+
+    // Initial vibration
+    navigator.vibrate(45);
+
+    // Continue while button is held
+    hapticInterval = setInterval(() => {
+
+        navigator.vibrate(45);
+
+    }, 100);
+}
+
+
+function stopHaptics() {
+
+    if (hapticInterval !== null) {
+
+        clearInterval(hapticInterval);
+
+        hapticInterval = null;
+    }
+
+    if ("vibrate" in navigator) {
+
+        navigator.vibrate(0);
+
+    }
+}
 
 
 function sendCommand(command) {
@@ -193,26 +236,21 @@ function pressButton(button) {
     const command =
         button.dataset.command;
 
-
     if (!command) return;
-
 
     activeCommand =
         command;
-
 
     button.classList.add(
         "pressed"
     );
 
+    startHaptics();
 
     sendCommand(
         command
     );
-
 }
-
-
 // ==========================================
 // RELEASE BUTTON
 // ==========================================
