@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width,
+                 initial-scale=1.0,
+                 maximum-scale=1.0,
+                 user-scalable=no"
+    >
+
+    <title>RIK — Robot In Kontrol</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+
+<body>
+
+<div id="app">
+
+
+    <!-- =========================================
+         TOP BAR
+    ========================================== -->
+
+    <header class="top-bar">
+
+        <div class="brand">
+
+            <div class="brand-title">
+                RIK
+            </div>
+
+            <div class="brand-subtitle">
+                ROBOT IN KONTROL
+            </div>
+
+        </div>
+
+
+        <div class="connection-pill">
+
+            <span class="connection-dot"></span>
+
+            <div>
+
+                <strong>
+                    CONNECTED
+                </strong>
+
+                <small>
+                    ESP32
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="battery">
+
+            <div class="battery-icon">
+
+                <div
+                    class="battery-level"
+                    id="batteryLevel"
+                ></div>
+
+            </div>
+
+            <div class="battery-text">
+
+                <strong id="batteryVoltage">
+                    12.4 V
+                </strong>
+
+                <small id="batteryPercent">
+                    88%
+                </small>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+
+    <!-- =========================================
+         SENSOR OUTPUT
+    ========================================== -->
+
+    <section class="sensor-section">
+
+        <div class="section-heading">
+
+            <span class="section-title">
+                SENSOR OUTPUT
+            </span>
+
+            <span class="live-indicator">
+                <span></span>
+                LIVE
+            </span>
+
+        </div>
+
+
+        <div class="sensor-grid">
+
+
+            <!-- SOIL -->
+
+            <div class="sensor-card soil-card">
+
+                <div class="sensor-icon">
+
+                    <svg viewBox="0 0 24 24">
+
+                        <path d="M12 21V11"></path>
+
+                        <path d="M12 15C8.2 15 5 12.2 5 8
+                                 c3.9 0 7 2.8 7 7"></path>
+
+                        <path d="M12 13c0-4 3-7 7-7
+                                 0 4-3 7-7 7Z"></path>
+
+                        <path d="M7 21h10"></path>
+
+                    </svg>
+
+                </div>
+
+
+                <div class="sensor-info">
+
+                    <span class="sensor-name">
+                        SOIL MOISTURE
+                    </span>
+
+                    <strong id="soilValue">
+                        --%
+                    </strong>
+
+                    <div class="sensor-progress">
+
+                        <div
+                            id="soilProgress"
+                            style="width: 0%"
+                        ></div>
+
+                    </div>
+
+                    <small id="soilStatus">
+                        Waiting for sensor
+                    </small>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- MQ135 -->
+
+            <div class="sensor-card air-card">
+
+                <div class="sensor-icon">
+
+                    <svg viewBox="0 0 24 24">
+
+                        <path d="M4 16h12"></path>
+
+                        <path d="M6 13h11"></path>
+
+                        <path d="M8 10h9"></path>
+
+                        <path d="M17 7h3"></path>
+
+                        <path d="M19 4v3"></path>
+
+                    </svg>
+
+                </div>
+
+
+                <div class="sensor-info">
+
+                    <span class="sensor-name">
+                        MQ135 AIR
+                    </span>
+
+                    <strong id="airValue">
+                        ---
+                    </strong>
+
+                    <div class="sensor-progress">
+
+                        <div
+                            id="airProgress"
+                            style="width: 0%"
+                        ></div>
+
+                    </div>
+
+                    <small id="airStatus">
+                        Waiting for sensor
+                    </small>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- SIGNAL -->
+
+            <div class="sensor-card signal-card">
+
+                <div class="sensor-icon">
+
+                    <svg viewBox="0 0 24 24">
+
+                        <path d="M4 20v-3"></path>
+
+                        <path d="M9 20v-6"></path>
+
+                        <path d="M14 20v-10"></path>
+
+                        <path d="M19 20V6"></path>
+
+                    </svg>
+
+                </div>
+
+
+                <div class="sensor-info">
+
+                    <span class="sensor-name">
+                        WI-FI SIGNAL
+                    </span>
+
+                    <strong id="signalValue">
+                        ---
+                    </strong>
+
+                    <small id="signalStatus">
+                        Waiting for connection
+                    </small>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </section>
+
+
+
+    <!-- =========================================
+         MAIN CONTROLS
+    ========================================== -->
+
+    <main class="controls-area">
+
+
+        <!-- =====================================
+             MOVEMENT
+        ====================================== -->
+
+        <section class="control-panel movement-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-title">
+                        MOVEMENT
+                    </span>
+
+                    <small>
+                        HOLD TO DRIVE
+                    </small>
+
+                </div>
+
+
+                <div class="drive-state">
+
+                    <span
+                        class="drive-dot"
+                        id="driveDot"
+                    ></span>
+
+                    <span id="driveState">
+                        STOPPED
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="movement-content">
+
+
+                <div class="movement-pad">
+
+
+                    <!-- FORWARD -->
+
+                    <button
+                        class="control-button forward"
+                        data-command="FORWARD"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M12 19V5"></path>
+
+                            <path d="m6 11 6-6 6 6"></path>
+
+                        </svg>
+
+                        <small>
+                            FORWARD
+                        </small>
+
+                    </button>
+
+
+
+                    <!-- LEFT -->
+
+                    <button
+                        class="control-button left"
+                        data-command="LEFT"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M19 12H5"></path>
+
+                            <path d="m11 6-6 6 6 6"></path>
+
+                        </svg>
+
+                        <small>
+                            LEFT
+                        </small>
+
+                    </button>
+
+
+
+                    <!-- CENTER -->
+
+                    <div class="movement-center">
+
+                        <div class="center-ring">
+
+                            <svg viewBox="0 0 24 24">
+
+                                <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="3"
+                                ></circle>
+
+                            </svg>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <!-- RIGHT -->
+
+                    <button
+                        class="control-button right"
+                        data-command="RIGHT"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M5 12h14"></path>
+
+                            <path d="m13 6 6 6-6 6"></path>
+
+                        </svg>
+
+                        <small>
+                            RIGHT
+                        </small>
+
+                    </button>
+
+
+
+                    <!-- BACKWARD -->
+
+                    <button
+                        class="control-button backward"
+                        data-command="BACKWARD"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M12 5v14"></path>
+
+                            <path d="m18 13-6 6-6-6"></path>
+
+                        </svg>
+
+                        <small>
+                            BACKWARD
+                        </small>
+
+                    </button>
+
+
+                </div>
+
+
+
+                <!-- SPEED -->
+
+                <div class="speed-control">
+
+                    <div class="speed-header">
+
+                        <span>
+                            DRIVE SPEED
+                        </span>
+
+                        <strong id="speedValue">
+                            65%
+                        </strong>
+
+                    </div>
+
+
+                    <input
+                        type="range"
+                        id="speedSlider"
+                        min="10"
+                        max="100"
+                        value="65"
+                    >
+
+                    <div class="speed-labels">
+
+                        <span>
+                            PRECISION
+                        </span>
+
+                        <span>
+                            MAX
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </section>
+
+
+
+        <!-- =====================================
+             ARM + CLAW
+        ====================================== -->
+
+        <section class="control-panel arm-claw-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-title">
+                        ARM & CLAW
+                    </span>
+
+                    <small>
+                        HOLD TO MOVE
+                    </small>
+
+                </div>
+
+
+                <div class="arm-state">
+
+                    <span>
+                        ARM
+                    </span>
+
+                    <strong id="armPosition">
+                        READY
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="arm-claw-grid">
+
+
+                <!-- ARM -->
+
+                <div class="sub-control">
+
+                    <div class="sub-title">
+                        ARM
+                    </div>
+
+
+                    <button
+                        class="action-button arm-up"
+                        data-command="ARM_UP"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M12 19V5"></path>
+
+                            <path d="m6 11 6-6 6 6"></path>
+
+                        </svg>
+
+                        <div>
+
+                            <strong>
+                                ARM UP
+                            </strong>
+
+                            <small>
+                                RAISE
+                            </small>
+
+                        </div>
+
+                    </button>
+
+
+                    <button
+                        class="action-button arm-down"
+                        data-command="ARM_DOWN"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M12 5v14"></path>
+
+                            <path d="m18 13-6 6-6-6"></path>
+
+                        </svg>
+
+                        <div>
+
+                            <strong>
+                                ARM DOWN
+                            </strong>
+
+                            <small>
+                                LOWER
+                            </small>
+
+                        </div>
+
+                    </button>
+
+                </div>
+
+
+
+                <!-- CLAW -->
+
+                <div class="sub-control">
+
+                    <div class="sub-title">
+                        CLAW
+                    </div>
+
+
+                    <button
+                        class="action-button claw-open"
+                        data-command="CLAW_OPEN"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M8 5c-3 2-4 6-2 9"></path>
+
+                            <path d="M16 5c3 2 4 6 2 9"></path>
+
+                            <path d="M7 14l-2 4"></path>
+
+                            <path d="M17 14l2 4"></path>
+
+                        </svg>
+
+                        <div>
+
+                            <strong>
+                                OPEN
+                            </strong>
+
+                            <small>
+                                RELEASE
+                            </small>
+
+                        </div>
+
+                    </button>
+
+
+                    <button
+                        class="action-button claw-close"
+                        data-command="CLAW_CLOSE"
+                    >
+
+                        <svg viewBox="0 0 24 24">
+
+                            <path d="M8 5c-2 3-2 7 1 10"></path>
+
+                            <path d="M16 5c2 3 2 7-1 10"></path>
+
+                            <path d="M9 15l-2 4"></path>
+
+                            <path d="M15 15l2 4"></path>
+
+                        </svg>
+
+                        <div>
+
+                            <strong>
+                                CLOSE
+                            </strong>
+
+                            <small>
+                                GRIP
+                            </small>
+
+                        </div>
+
+                    </button>
+
+                </div>
+
+
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+
+    <!-- =========================================
+         STATUS BAR
+    ========================================== -->
+
+    <footer class="status-bar">
+
+
+        <div class="status-item">
+
+            <span class="status-label">
+                ROBOT
+            </span>
+
+            <strong
+                id="robotStatus"
+                class="ready"
+            >
+                READY
+            </strong>
+
+        </div>
+
+
+        <button
+            class="timer-button"
+            id="timerButton"
+        >
+
+            <svg viewBox="0 0 24 24">
+
+                <circle
+                    cx="12"
+                    cy="12"
+                    r="8"
+                ></circle>
+
+                <path d="M12 8v5l3 2"></path>
+
+                <path d="M9 3h6"></path>
+
+            </svg>
+
+
+            <div>
+
+                <span class="status-label">
+                    TIMER
+                </span>
+
+                <strong id="timerDisplay">
+                    00:00
+                </strong>
+
+            </div>
+
+        </button>
+
+
+        <div class="status-item">
+
+            <span class="status-label">
+                MODE
+            </span>
+
+            <strong>
+                MANUAL
+            </strong>
+
+        </div>
+
+
+    </footer>
+
+
+
+    <!-- =========================================
+         TIMER MODAL
+    ========================================== -->
+
+    <div
+        class="timer-overlay"
+        id="timerOverlay"
+    >
+
+        <div class="timer-modal">
+
+
+            <button
+                class="close-timer"
+                id="closeTimer"
+            >
+                ×
+            </button>
+
+
+            <div class="timer-modal-icon">
+
+                <svg viewBox="0 0 24 24">
+
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="8"
+                    ></circle>
+
+                    <path d="M12 8v5l3 2"></path>
+
+                    <path d="M9 3h6"></path>
+
+                </svg>
+
+            </div>
+
+
+            <div class="timer-modal-title">
+                OPERATION TIMER
+            </div>
+
+
+            <div class="timer-modal-subtitle">
+                Set a countdown for the operation
+            </div>
+
+
+            <div class="timer-inputs">
+
+
+                <div>
+
+                    <label>
+                        MINUTES
+                    </label>
+
+                    <input
+                        type="number"
+                        id="timerMinutes"
+                        min="0"
+                        max="59"
+                        value="0"
+                    >
+
+                </div>
+
+
+                <span>
+                    :
+                </span>
+
+
+                <div>
+
+                    <label>
+                        SECONDS
+                    </label>
+
+                    <input
+                        type="number"
+                        id="timerSeconds"
+                        min="0"
+                        max="59"
+                        value="30"
+                    >
+
+                </div>
+
+
+            </div>
+
+
+            <button
+                class="start-timer"
+                id="startTimer"
+            >
+                START TIMER
+            </button>
+
+
+            <button
+                class="reset-timer"
+                id="resetTimer"
+            >
+                RESET
+            </button>
+
+
+        </div>
+
+    </div>
+
+
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+
+</html>
