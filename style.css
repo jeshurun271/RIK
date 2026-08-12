@@ -1,0 +1,2356 @@
+/* =========================================
+   RIK — GLOBAL
+========================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+
+    user-select: none;
+
+    -webkit-tap-highlight-color: transparent;
+}
+
+
+:root {
+
+    --background: #efede9;
+
+    --card: rgba(255, 255, 255, 0.67);
+
+    --card-strong: rgba(255, 255, 255, 0.82);
+
+    --text: #202126;
+
+    --secondary: #77777d;
+
+    --green: #35c759;
+
+    --blue: #4f7cff;
+
+    --purple: #8b67e8;
+
+    --orange: #ed9b3d;
+
+    --red: #ff4d45;
+
+    --border:
+        rgba(255, 255, 255, 0.90);
+
+    --shadow:
+        0 12px 32px rgba(50, 45, 40, 0.075),
+        0 2px 8px rgba(50, 45, 40, 0.035);
+
+}
+
+
+html,
+body {
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+}
+
+
+body {
+
+    position: relative;
+
+    isolation: isolate;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "SF Pro Text",
+        "Segoe UI",
+        sans-serif;
+
+    color: var(--text);
+
+    background:
+        #efede9;
+
+}
+
+
+/*/* =========================================================
+   RIK — PREMIUM ANIMATED AURORA BACKDROP
+   ========================================================= */
+
+body {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+
+    background:
+        linear-gradient(
+            135deg,
+            #eeeae3 0%,
+            #f3f0ed 45%,
+            #e8e9e8 100%
+        );
+}
+
+
+/* ---------------------------------------------------------
+   MAIN AURORA
+--------------------------------------------------------- */
+
+body::before {
+
+    content: "";
+
+    position: fixed;
+
+    width: 110vw;
+    height: 110vh;
+
+    left: -5vw;
+    top: -5vh;
+
+    z-index: -3;
+
+    pointer-events: none;
+
+    background:
+
+        radial-gradient(
+            ellipse at 18% 25%,
+            rgba(255, 188, 119, 0.48) 0%,
+            rgba(255, 188, 119, 0.22) 16%,
+            transparent 42%
+        ),
+
+        radial-gradient(
+            ellipse at 78% 20%,
+            rgba(164, 145, 239, 0.42) 0%,
+            rgba(164, 145, 239, 0.18) 17%,
+            transparent 43%
+        ),
+
+        radial-gradient(
+            ellipse at 72% 82%,
+            rgba(112, 201, 164, 0.38) 0%,
+            rgba(112, 201, 164, 0.15) 18%,
+            transparent 42%
+        ),
+
+        radial-gradient(
+            ellipse at 25% 85%,
+            rgba(240, 158, 190, 0.20) 0%,
+            transparent 35%
+        );
+
+    filter: blur(35px);
+
+    transform:
+        translate3d(0, 0, 0)
+        scale(1.05);
+
+    animation:
+        rikAurora 18s ease-in-out infinite alternate;
+
+    will-change: transform;
+
+}
+
+
+/* ---------------------------------------------------------
+   SECOND AURORA LAYER
+--------------------------------------------------------- */
+
+body::after {
+
+    content: "";
+
+    position: fixed;
+
+    width: 120vw;
+    height: 120vh;
+
+    left: -10vw;
+    top: -10vh;
+
+    z-index: -2;
+
+    pointer-events: none;
+
+    background:
+
+        radial-gradient(
+            ellipse at 45% 15%,
+            rgba(255, 225, 182, 0.22),
+            transparent 35%
+        ),
+
+        radial-gradient(
+            ellipse at 88% 65%,
+            rgba(130, 172, 255, 0.20),
+            transparent 34%
+        ),
+
+        radial-gradient(
+            ellipse at 10% 62%,
+            rgba(170, 230, 203, 0.20),
+            transparent 34%
+        );
+
+    filter: blur(55px);
+
+    transform:
+        translate3d(0, 0, 0)
+        scale(1.08);
+
+    animation:
+        rikAurora2 25s ease-in-out infinite alternate;
+
+    will-change: transform;
+
+}
+
+
+/* ---------------------------------------------------------
+   A SUBTLE MOVING LIGHT RIBBON
+--------------------------------------------------------- */
+
+#app::before {
+
+    content: "";
+
+    position: fixed;
+
+    width: 70vw;
+    height: 18vh;
+
+    left: 15vw;
+    top: 38vh;
+
+    z-index: -1;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,0.24),
+            transparent
+        );
+
+    filter: blur(30px);
+
+    transform:
+        rotate(-8deg)
+        translateX(-15vw);
+
+    animation:
+        rikLightSweep 16s ease-in-out infinite;
+
+}
+
+
+/* ---------------------------------------------------------
+   VERY SUBTLE DEPTH GRID
+--------------------------------------------------------- */
+
+#app::after {
+
+    content: "";
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: -1;
+
+    pointer-events: none;
+
+    opacity: 0.18;
+
+    background-image:
+
+        linear-gradient(
+            rgba(255,255,255,0.20) 1px,
+            transparent 1px
+        ),
+
+        linear-gradient(
+            90deg,
+            rgba(255,255,255,0.20) 1px,
+            transparent 1px
+        );
+
+    background-size:
+        80px 80px;
+
+    mask-image:
+        radial-gradient(
+            ellipse at center,
+            black 0%,
+            transparent 72%
+        );
+
+    -webkit-mask-image:
+        radial-gradient(
+            ellipse at center,
+            black 0%,
+            transparent 72%
+        );
+
+}
+
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+
+@keyframes rikAurora {
+
+    0% {
+
+        transform:
+            translate3d(-3%, -2%, 0)
+            scale(1.05)
+            rotate(0deg);
+
+    }
+
+    25% {
+
+        transform:
+            translate3d(2%, 1%, 0)
+            scale(1.09)
+            rotate(1deg);
+
+    }
+
+    50% {
+
+        transform:
+            translate3d(4%, -2%, 0)
+            scale(1.06)
+            rotate(-1deg);
+
+    }
+
+    75% {
+
+        transform:
+            translate3d(-2%, 3%, 0)
+            scale(1.10)
+            rotate(1deg);
+
+    }
+
+    100% {
+
+        transform:
+            translate3d(-4%, 1%, 0)
+            scale(1.05)
+            rotate(0deg);
+
+    }
+
+}
+
+
+@keyframes rikAurora2 {
+
+    0% {
+
+        transform:
+            translate3d(4%, -3%, 0)
+            scale(1.08)
+            rotate(0deg);
+
+    }
+
+    50% {
+
+        transform:
+            translate3d(-4%, 3%, 0)
+            scale(1.13)
+            rotate(-2deg);
+
+    }
+
+    100% {
+
+        transform:
+            translate3d(2%, -2%, 0)
+            scale(1.08)
+            rotate(2deg);
+
+    }
+
+}
+
+
+@keyframes rikLightSweep {
+
+    0% {
+
+        transform:
+            rotate(-8deg)
+            translateX(-45vw);
+
+        opacity: 0;
+
+    }
+
+    20% {
+
+        opacity: 0.5;
+
+    }
+
+    50% {
+
+        opacity: 0.8;
+
+    }
+
+    80% {
+
+        opacity: 0.35;
+
+    }
+
+    100% {
+
+        transform:
+            rotate(-8deg)
+            translateX(45vw);
+
+        opacity: 0;
+
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    body::before,
+    body::after,
+    #app::before {
+
+        animation: none;
+
+    }
+
+}
+/* =========================================
+   APP
+========================================= */
+
+#app {
+
+    width: 100%;
+
+    height: 100vh;
+
+    padding:
+        16px 22px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 12px;
+
+}
+
+
+/* =========================================
+   TOP BAR
+========================================= */
+
+.top-bar {
+
+    position: relative;
+
+    height: 64px;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    align-items: center;
+
+    padding:
+        10px 16px;
+
+    border-radius: 22px;
+
+    background:
+        rgba(255,255,255,0.70);
+
+    border:
+        1px solid var(--border);
+
+    backdrop-filter:
+        blur(24px);
+
+    -webkit-backdrop-filter:
+        blur(24px);
+
+    box-shadow:
+        var(--shadow);
+
+}
+
+
+.brand {
+
+    min-width: 230px;
+
+}
+
+
+.brand-title {
+
+    font-size: 25px;
+
+    font-weight: 800;
+
+    letter-spacing: -1.2px;
+
+}
+
+
+.brand-subtitle {
+
+    margin-top: 1px;
+
+    color: var(--secondary);
+
+    font-size: 9px;
+
+    font-weight: 650;
+
+    letter-spacing: 1.5px;
+
+}
+
+
+/* =========================================
+   CONNECTION
+========================================= */
+
+.connection-pill {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    margin-left: auto;
+
+    padding:
+        8px 13px;
+
+    border-radius: 15px;
+
+    background:
+        rgba(53,199,89,0.10);
+
+}
+
+
+.connection-dot {
+
+    width: 9px;
+
+    height: 9px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background:
+        var(--green);
+
+    box-shadow:
+        0 0 0 4px
+        rgba(53,199,89,0.10);
+
+}
+
+
+.connection-pill strong {
+
+    display: block;
+
+    font-size: 10px;
+
+    letter-spacing: 0.5px;
+
+}
+
+
+.connection-pill small {
+
+    display: block;
+
+    margin-top: 1px;
+
+    color: var(--secondary);
+
+    font-size: 8px;
+
+}
+
+
+/* =========================================
+   BATTERY
+========================================= */
+
+.battery {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    margin-left: 12px;
+
+}
+
+
+.battery-icon {
+
+    position: relative;
+
+    width: 30px;
+
+    height: 15px;
+
+    padding: 2px;
+
+    border:
+        1.5px solid #777;
+
+    border-radius: 4px;
+
+}
+
+
+.battery-icon::after {
+
+    content: "";
+
+    position: absolute;
+
+    top: 3px;
+
+    right: -4px;
+
+    width: 2px;
+
+    height: 6px;
+
+    background: #777;
+
+    border-radius: 1px;
+
+}
+
+
+.battery-level {
+
+    height: 100%;
+
+    width: 88%;
+
+    border-radius: 2px;
+
+    background:
+        var(--green);
+
+}
+
+
+.battery-text {
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+
+.battery-text strong {
+
+    font-size: 11px;
+
+}
+
+
+.battery-text small {
+
+    color: var(--secondary);
+
+    font-size: 8px;
+
+}
+
+
+/* =========================================
+   SENSOR SECTION
+========================================= */
+
+.sensor-section {
+
+    flex-shrink: 0;
+
+}
+
+
+.section-heading {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 7px;
+
+}
+
+
+.section-title {
+
+    color: var(--secondary);
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 1.4px;
+
+}
+
+
+.live-indicator {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    color: var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.7px;
+
+}
+
+
+.live-indicator span {
+
+    width: 5px;
+
+    height: 5px;
+
+    border-radius: 50%;
+
+    background:
+        var(--green);
+
+    box-shadow:
+        0 0 7px
+        rgba(53,199,89,0.65);
+
+}
+
+
+.sensor-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 11px;
+
+}
+
+
+.sensor-card {
+
+    min-height: 76px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    padding:
+        11px 15px;
+
+    border-radius: 19px;
+
+    background:
+        var(--card);
+
+    border:
+        1px solid var(--border);
+
+    backdrop-filter:
+        blur(20px);
+
+    -webkit-backdrop-filter:
+        blur(20px);
+
+    box-shadow:
+        var(--shadow);
+
+}
+
+
+.sensor-icon {
+
+    width: 40px;
+
+    height: 40px;
+
+    flex-shrink: 0;
+
+    display: grid;
+
+    place-items: center;
+
+    border-radius: 13px;
+
+}
+
+
+.sensor-icon svg {
+
+    width: 21px;
+
+    height: 21px;
+
+    fill: none;
+
+    stroke: currentColor;
+
+    stroke-width: 1.7;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.soil-card .sensor-icon {
+
+    color:
+        var(--green);
+
+    background:
+        rgba(53,199,89,0.12);
+
+}
+
+
+.air-card .sensor-icon {
+
+    color:
+        var(--purple);
+
+    background:
+        rgba(139,103,232,0.12);
+
+}
+
+
+.signal-card .sensor-icon {
+
+    color:
+        var(--blue);
+
+    background:
+        rgba(79,124,255,0.12);
+
+}
+
+
+.sensor-info {
+
+    min-width: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+
+.sensor-name {
+
+    color: var(--secondary);
+
+    font-size: 8px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.8px;
+
+}
+
+
+.sensor-info strong {
+
+    margin-top: 1px;
+
+    font-size: 20px;
+
+    line-height: 22px;
+
+    letter-spacing: -0.4px;
+
+}
+
+
+.sensor-info small {
+
+    margin-top: 2px;
+
+    color: var(--secondary);
+
+    font-size: 7px;
+
+}
+
+
+.sensor-progress {
+
+    width: 100%;
+
+    max-width: 130px;
+
+    height: 3px;
+
+    margin-top: 4px;
+
+    overflow: hidden;
+
+    border-radius: 10px;
+
+    background:
+        rgba(0,0,0,0.055);
+
+}
+
+
+.sensor-progress div {
+
+    height: 100%;
+
+    border-radius: inherit;
+
+    background:
+        var(--green);
+
+    transition:
+        width 0.4s ease;
+
+}
+
+
+.air-card .sensor-progress div {
+
+    background:
+        var(--purple);
+
+}
+
+
+/* =========================================
+   MAIN CONTROLS
+========================================= */
+
+.controls-area {
+
+    min-height: 0;
+
+    flex: 1;
+
+    display: grid;
+
+    grid-template-columns:
+        1.25fr 1fr;
+
+    gap: 12px;
+
+}
+
+
+.control-panel {
+
+    position: relative;
+
+    min-height: 0;
+
+    overflow: hidden;
+
+    padding: 15px;
+
+    border-radius: 24px;
+
+    background:
+        var(--card);
+
+    border:
+        1px solid var(--border);
+
+    backdrop-filter:
+        blur(22px);
+
+    -webkit-backdrop-filter:
+        blur(22px);
+
+    box-shadow:
+        var(--shadow);
+
+}
+
+
+.control-panel::before {
+
+    content: "";
+
+    position: absolute;
+
+    top: -90px;
+
+    right: -90px;
+
+    width: 190px;
+
+    height: 190px;
+
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(255,255,255,0.48),
+            transparent 70%
+        );
+
+    pointer-events: none;
+
+}
+
+
+/* =========================================
+   PANEL HEADER
+========================================= */
+
+.panel-header {
+
+    position: relative;
+
+    z-index: 2;
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: flex-start;
+
+}
+
+
+.panel-header small {
+
+    display: block;
+
+    margin-top: 2px;
+
+    color:
+        rgba(100,100,105,0.65);
+
+    font-size: 6px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.8px;
+
+}
+
+
+.drive-state {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    padding:
+        5px 8px;
+
+    border-radius: 10px;
+
+    background:
+        rgba(0,0,0,0.035);
+
+    color: var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.5px;
+
+}
+
+
+.drive-dot {
+
+    width: 5px;
+
+    height: 5px;
+
+    border-radius: 50%;
+
+    background:
+        #aaa;
+
+}
+
+
+.drive-state.active .drive-dot {
+
+    background:
+        var(--green);
+
+    box-shadow:
+        0 0 6px
+        rgba(53,199,89,0.7);
+
+}
+
+
+/* =========================================
+   MOVEMENT
+========================================= */
+
+.movement-panel {
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+
+.movement-content {
+
+    flex: 1;
+
+    min-height: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+
+.movement-pad {
+
+    flex: 1;
+
+    min-height: 0;
+
+    width: min(390px, 70%);
+
+    aspect-ratio: 1.35;
+
+    margin:
+        4px auto 2px;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    grid-template-rows:
+        repeat(3, 1fr);
+
+    gap: 8px;
+
+}
+
+
+.control-button {
+
+    border: none;
+
+    border-radius: 19px;
+
+    background:
+        rgba(255,255,255,0.82);
+
+    color:
+        var(--text);
+
+    box-shadow:
+        0 7px 18px
+        rgba(0,0,0,0.055),
+
+        inset 0 1px 0
+        rgba(255,255,255,0.95);
+
+    cursor: pointer;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 4px;
+
+    touch-action: none;
+
+    transition:
+        transform 0.08s ease,
+        background 0.12s ease,
+        box-shadow 0.12s ease;
+
+}
+
+
+.control-button svg {
+
+    width: 25px;
+
+    height: 25px;
+
+    fill: none;
+
+    stroke:
+        currentColor;
+
+    stroke-width: 1.8;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.control-button small {
+
+    color:
+        var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.7px;
+
+}
+
+
+.control-button.pressed {
+
+    transform:
+        scale(0.93);
+
+    background:
+        rgba(79,124,255,0.14);
+
+    box-shadow:
+        inset 0 3px 8px
+        rgba(0,0,0,0.07);
+
+}
+
+
+.forward {
+
+    grid-column: 2;
+
+    grid-row: 1;
+
+}
+
+
+.left {
+
+    grid-column: 1;
+
+    grid-row: 2;
+
+}
+
+
+.right {
+
+    grid-column: 3;
+
+    grid-row: 2;
+
+}
+
+
+.backward {
+
+    grid-column: 2;
+
+    grid-row: 3;
+
+}
+
+
+.movement-center {
+
+    grid-column: 2;
+
+    grid-row: 2;
+
+    display: grid;
+
+    place-items: center;
+
+}
+
+
+.center-ring {
+
+    width: 48px;
+
+    height: 48px;
+
+    display: grid;
+
+    place-items: center;
+
+    border-radius: 50%;
+
+    background:
+        rgba(255,255,255,0.45);
+
+    border:
+        1px solid
+        rgba(0,0,0,0.055);
+
+    box-shadow:
+        inset 0 2px 7px
+        rgba(0,0,0,0.035);
+
+}
+
+
+.center-ring svg {
+
+    width: 20px;
+
+    height: 20px;
+
+    fill: none;
+
+    stroke:
+        rgba(70,70,75,0.40);
+
+    stroke-width: 1.5;
+
+}
+
+
+/* =========================================
+   SPEED
+========================================= */
+
+.speed-control {
+
+    width: min(390px, 70%);
+
+    margin:
+        3px auto 0;
+
+}
+
+
+.speed-header {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+}
+
+
+.speed-header span {
+
+    color:
+        var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.8px;
+
+}
+
+
+.speed-header strong {
+
+    font-size: 9px;
+
+}
+
+
+#speedSlider {
+
+    width: 100%;
+
+    height: 4px;
+
+    margin-top: 7px;
+
+    appearance: none;
+
+    -webkit-appearance: none;
+
+    border-radius: 10px;
+
+    background:
+        rgba(0,0,0,0.08);
+
+    outline: none;
+
+}
+
+
+#speedSlider::-webkit-slider-thumb {
+
+    appearance: none;
+
+    -webkit-appearance: none;
+
+    width: 15px;
+
+    height: 15px;
+
+    border-radius: 50%;
+
+    background:
+        #ffffff;
+
+    border:
+        2px solid
+        var(--blue);
+
+    box-shadow:
+        0 2px 7px
+        rgba(0,0,0,0.12);
+
+    cursor: pointer;
+
+}
+
+
+.speed-labels {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    margin-top: 3px;
+
+    color:
+        rgba(100,100,105,0.55);
+
+    font-size: 6px;
+
+    font-weight: 700;
+
+}
+
+
+/* =========================================
+   ARM + CLAW
+========================================= */
+
+.arm-claw-panel {
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+
+.arm-state {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: flex-end;
+
+}
+
+
+.arm-state span {
+
+    color:
+        var(--secondary);
+
+    font-size: 6px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.7px;
+
+}
+
+
+.arm-state strong {
+
+    margin-top: 1px;
+
+    font-size: 8px;
+
+}
+
+
+.arm-claw-grid {
+
+    flex: 1;
+
+    min-height: 0;
+
+    display: grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap: 10px;
+
+}
+
+
+.sub-control {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 7px;
+
+}
+
+
+.sub-title {
+
+    color:
+        var(--secondary);
+
+    font-size: 8px;
+
+    font-weight: 750;
+
+    letter-spacing: 1px;
+
+}
+
+
+.action-button {
+
+    flex: 1;
+
+    min-height: 60px;
+
+    border: none;
+
+    border-radius: 18px;
+
+    background:
+        rgba(255,255,255,0.82);
+
+    box-shadow:
+        0 7px 18px
+        rgba(0,0,0,0.05);
+
+    color:
+        var(--text);
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 9px;
+
+    cursor: pointer;
+
+    touch-action: none;
+
+    transition:
+        transform 0.08s ease,
+        background 0.12s ease;
+
+}
+
+
+.action-button svg {
+
+    width: 22px;
+
+    height: 22px;
+
+    fill: none;
+
+    stroke:
+        currentColor;
+
+    stroke-width: 1.8;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.action-button div {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: flex-start;
+
+}
+
+
+.action-button strong {
+
+    font-size: 8px;
+
+}
+
+
+.action-button small {
+
+    margin-top: 2px;
+
+    color:
+        var(--secondary);
+
+    font-size: 6px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.6px;
+
+}
+
+
+.action-button.pressed {
+
+    transform:
+        scale(0.95);
+
+}
+
+
+.arm-up.pressed {
+
+    background:
+        rgba(53,199,89,0.14);
+
+}
+
+
+.arm-down.pressed {
+
+    background:
+        rgba(237,155,61,0.14);
+
+}
+
+
+.claw-open.pressed {
+
+    background:
+        rgba(79,124,255,0.14);
+
+}
+
+
+.claw-close.pressed {
+
+    background:
+        rgba(139,103,232,0.14);
+
+}
+
+
+/* =========================================
+   STATUS BAR
+========================================= */
+
+.status-bar {
+
+    height: 43px;
+
+    flex-shrink: 0;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    gap: 70px;
+
+    padding:
+        7px 18px;
+
+    border-radius: 17px;
+
+    background:
+        rgba(255,255,255,0.60);
+
+    border:
+        1px solid
+        rgba(255,255,255,0.75);
+
+    backdrop-filter:
+        blur(18px);
+
+    -webkit-backdrop-filter:
+        blur(18px);
+
+}
+
+
+.status-item {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+}
+
+
+.status-label {
+
+    color:
+        var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.8px;
+
+}
+
+
+.status-item strong {
+
+    font-size: 9px;
+
+}
+
+
+.ready {
+
+    color:
+        var(--green);
+
+}
+
+
+/* =========================================
+   TIMER BUTTON
+========================================= */
+
+.timer-button {
+
+    border: none;
+
+    background: transparent;
+
+    color:
+        var(--text);
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    cursor: pointer;
+
+}
+
+
+.timer-button svg {
+
+    width: 19px;
+
+    height: 19px;
+
+    fill: none;
+
+    stroke:
+        var(--purple);
+
+    stroke-width: 1.7;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.timer-button div {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+}
+
+
+.timer-button strong {
+
+    font-size: 9px;
+
+}
+
+
+/* =========================================
+   TIMER MODAL
+========================================= */
+
+.timer-overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 100;
+
+    display: none;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background:
+        rgba(20,20,24,0.28);
+
+    backdrop-filter:
+        blur(12px);
+
+    -webkit-backdrop-filter:
+        blur(12px);
+
+}
+
+
+.timer-overlay.show {
+
+    display: flex;
+
+}
+
+
+.timer-modal {
+
+    position: relative;
+
+    width: 340px;
+
+    padding: 27px;
+
+    border-radius: 28px;
+
+    background:
+        rgba(255,255,255,0.93);
+
+    border:
+        1px solid
+        rgba(255,255,255,0.95);
+
+    box-shadow:
+        0 25px 70px
+        rgba(0,0,0,0.20);
+
+    text-align: center;
+
+}
+
+
+.close-timer {
+
+    position: absolute;
+
+    top: 12px;
+
+    right: 14px;
+
+    width: 29px;
+
+    height: 29px;
+
+    border: none;
+
+    border-radius: 50%;
+
+    background:
+        rgba(0,0,0,0.055);
+
+    color:
+        var(--secondary);
+
+    font-size: 20px;
+
+    cursor: pointer;
+
+}
+
+
+.timer-modal-icon {
+
+    width: 44px;
+
+    height: 44px;
+
+    margin:
+        0 auto 11px;
+
+    display: grid;
+
+    place-items: center;
+
+    border-radius: 14px;
+
+    background:
+        rgba(139,103,232,0.11);
+
+    color:
+        var(--purple);
+
+}
+
+
+.timer-modal-icon svg {
+
+    width: 24px;
+
+    height: 24px;
+
+    fill: none;
+
+    stroke: currentColor;
+
+    stroke-width: 1.7;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.timer-modal-title {
+
+    font-size: 19px;
+
+    font-weight: 780;
+
+}
+
+
+.timer-modal-subtitle {
+
+    margin-top: 5px;
+
+    color:
+        var(--secondary);
+
+    font-size: 9px;
+
+}
+
+
+.timer-inputs {
+
+    margin:
+        24px 0;
+
+    display: flex;
+
+    align-items: flex-end;
+
+    justify-content: center;
+
+    gap: 10px;
+
+}
+
+
+.timer-inputs > span {
+
+    margin-bottom: 9px;
+
+    font-size: 24px;
+
+    font-weight: 750;
+
+}
+
+
+.timer-inputs div {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 5px;
+
+}
+
+
+.timer-inputs label {
+
+    color:
+        var(--secondary);
+
+    font-size: 7px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.5px;
+
+}
+
+
+.timer-inputs input {
+
+    width: 85px;
+
+    padding:
+        12px;
+
+    border: none;
+
+    border-radius: 14px;
+
+    background:
+        #f0eff2;
+
+    color:
+        var(--text);
+
+    text-align: center;
+
+    font-size: 22px;
+
+    font-weight: 750;
+
+    outline: none;
+
+}
+
+
+.start-timer {
+
+    width: 100%;
+
+    padding:
+        13px;
+
+    border: none;
+
+    border-radius: 15px;
+
+    background:
+        var(--text);
+
+    color:
+        white;
+
+    font-size: 11px;
+
+    font-weight: 750;
+
+    cursor: pointer;
+
+}
+
+
+.reset-timer {
+
+    margin-top: 9px;
+
+    border: none;
+
+    background: transparent;
+
+    color:
+        var(--secondary);
+
+    font-size: 9px;
+
+    cursor: pointer;
+
+}
+
+
+/* =========================================
+   LANDSCAPE COMPACT MODE
+========================================= */
+
+@media (max-height: 650px) {
+
+    #app {
+
+        padding:
+            9px 15px;
+
+        gap: 8px;
+
+    }
+
+
+    .top-bar {
+
+        height: 52px;
+
+    }
+
+
+    .brand-title {
+
+        font-size: 20px;
+
+    }
+
+
+    .sensor-card {
+
+        min-height: 58px;
+
+    }
+
+
+    .sensor-icon {
+
+        width: 34px;
+
+        height: 34px;
+
+    }
+
+
+    .sensor-info strong {
+
+        font-size: 17px;
+
+    }
+
+
+    .control-panel {
+
+        padding: 11px;
+
+    }
+
+
+    .status-bar {
+
+        height: 35px;
+
+    }
+
+}
+
+
+/* =========================================
+   REDUCED MOTION
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    body::before,
+    body::after {
+
+        animation:
+            none;
+
+    }
+
+}/* =========================================================
+   BUTTON EFFECT ONLY
+   Does NOT change text, icons, size or layout
+========================================================= */
+
+.control-button,
+.action-button {
+    position: relative;
+    overflow: hidden;
+
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.2s ease;
+}
+
+
+/* Soft light that moves across the button */
+
+.control-button::before,
+.action-button::before {
+    content: "";
+
+    position: absolute;
+
+    width: 140px;
+    height: 140px;
+
+    top: -90px;
+    left: -90px;
+
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(255,255,255,0.65) 0%,
+            rgba(255,255,255,0.18) 35%,
+            transparent 70%
+        );
+
+    opacity: 0;
+
+    pointer-events: none;
+
+    transition:
+        opacity 0.25s ease,
+        transform 0.5s ease;
+}
+
+
+/* Hover */
+
+@media (hover: hover) {
+
+    .control-button:hover,
+    .action-button:hover {
+
+        transform:
+            translateY(-2px);
+
+        box-shadow:
+            0 12px 28px rgba(40,40,40,0.09),
+            inset 0 1px 0 rgba(255,255,255,0.95);
+
+    }
+
+
+    .control-button:hover::before,
+    .action-button:hover::before {
+
+        opacity: 1;
+
+        transform:
+            translate3d(130px, 130px, 0);
+
+    }
+
+}
+
+
+/* Press */
+
+.control-button:active,
+.action-button:active,
+.control-button.pressed,
+.action-button.pressed {
+
+    transform:
+        scale(0.95);
+
+    box-shadow:
+        0 3px 10px rgba(30,30,30,0.08),
+        inset 0 3px 9px rgba(0,0,0,0.06);
+
+}
+
+
+/* Light pulse while held */
+
+.control-button.pressed::before,
+.action-button.pressed::before {
+
+    opacity: 1;
+
+    transform:
+        translate3d(80px, 80px, 0);
+
+    animation:
+        buttonGlow 1.4s ease-in-out infinite;
+
+}
+
+
+@keyframes buttonGlow {
+
+    0% {
+        opacity: 0.25;
+    }
+
+    50% {
+        opacity: 0.75;
+    }
+
+    100% {
+        opacity: 0.25;
+    }
+
+}
