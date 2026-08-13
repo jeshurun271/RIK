@@ -941,3 +941,41 @@ function updateDemoSensors() {
 // Run once.
 
 updateDemoSensors();
+// ==========================================
+// RIK PWA SERVICE WORKER
+// ==========================================
+
+if ("serviceWorker" in navigator) {
+
+    window.addEventListener(
+        "load",
+        () => {
+
+            navigator.serviceWorker.register(
+                "/sw.js"
+            )
+            .then(
+                registration => {
+
+                    console.log(
+                        "RIK PWA: Service worker registered",
+                        registration
+                    );
+
+                }
+            )
+            .catch(
+                error => {
+
+                    console.error(
+                        "RIK PWA: Service worker failed",
+                        error
+                    );
+
+                }
+            );
+
+        }
+    );
+
+}
