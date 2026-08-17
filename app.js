@@ -8,11 +8,14 @@
 // ==========================================
 
 let activeCommand = null;
+
+
 // ==========================================
 // RIK HAPTICS
 // ==========================================
 
 let hapticInterval = null;
+
 
 function startHaptics() {
 
@@ -24,17 +27,15 @@ function startHaptics() {
         return;
     }
 
-    // Initial vibration
-    navigator.vibrate(45);
+    navigator.vibrate(100);
 
-    // Continue while button is held
     hapticInterval = setInterval(() => {
 
-        navigator.vibrate(45);
+        navigator.vibrate(100);
 
     }, 100);
-}
 
+}
 
 function stopHaptics() {
 
@@ -43,6 +44,7 @@ function stopHaptics() {
         clearInterval(hapticInterval);
 
         hapticInterval = null;
+
     }
 
     if ("vibrate" in navigator) {
@@ -50,8 +52,13 @@ function stopHaptics() {
         navigator.vibrate(0);
 
     }
+
 }
 
+
+// ==========================================
+// SEND ROBOT COMMAND
+// ==========================================
 
 function sendCommand(command) {
 
@@ -62,15 +69,11 @@ function sendCommand(command) {
 
     if (robotStatus) {
 
-        robotStatus.textContent =
-            command;
+        robotStatus.textContent = command;
 
-        robotStatus.classList.remove(
-            "ready"
-        );
+        robotStatus.classList.remove("ready");
 
     }
-
 
     updateDriveState(command);
 
@@ -79,36 +82,36 @@ function sendCommand(command) {
 }
 
 
+// ==========================================
+// STOP ROBOT
+// ==========================================
+
 function stopRobot() {
 
     if (activeCommand !== null) {
 
-        console.log(
-            "RIK COMMAND: STOP"
-        );
+        console.log("RIK COMMAND: STOP");
 
         activeCommand = null;
 
     }
 
-
     const robotStatus =
         document.getElementById("robotStatus");
 
-
     if (robotStatus) {
 
-        robotStatus.textContent =
-            "READY";
+        robotStatus.textContent = "READY";
 
-        robotStatus.classList.add(
-            "ready"
-        );
+        robotStatus.classList.add("ready");
 
     }
 
-
     updateDriveState("STOP");
+
+    updateArmState("STOP");
+
+    stopHaptics();
 
 }
 
@@ -120,47 +123,30 @@ function stopRobot() {
 function updateDriveState(command) {
 
     const driveDot =
-        document.getElementById(
-            "driveDot"
-        );
+        document.getElementById("driveDot");
 
     const driveState =
-        document.getElementById(
-            "driveState"
-        );
-
+        document.getElementById("driveState");
 
     const movementCommands = [
-
         "FORWARD",
         "BACKWARD",
         "LEFT",
         "RIGHT"
-
     ];
 
-
     const driving =
-        movementCommands.includes(
-            command
-        );
-
+        movementCommands.includes(command);
 
     if (driveState) {
 
         driveState.textContent =
-            driving
-                ? command
-                : "STOPPED";
+            driving ? command : "STOPPED";
 
     }
 
-
     const driveStateBox =
-        document.querySelector(
-            ".drive-state"
-        );
-
+        document.querySelector(".drive-state");
 
     if (driveStateBox) {
 
@@ -171,13 +157,10 @@ function updateDriveState(command) {
 
     }
 
-
     if (driveDot) {
 
         driveDot.style.background =
-            driving
-                ? "#35c759"
-                : "#aaa";
+            driving ? "#35c759" : "#aaa";
 
     }
 
@@ -191,36 +174,27 @@ function updateDriveState(command) {
 function updateArmState(command) {
 
     const armPosition =
-        document.getElementById(
-            "armPosition"
-        );
+        document.getElementById("armPosition");
 
-
-    if (!armPosition) return;
-
+    if (!armPosition) {
+        return;
+    }
 
     if (command === "ARM_UP") {
 
-        armPosition.textContent =
-            "RAISING";
+        armPosition.textContent = "RAISING";
 
     }
 
-    else if (
-        command === "ARM_DOWN"
-    ) {
+    else if (command === "ARM_DOWN") {
 
-        armPosition.textContent =
-            "LOWERING";
+        armPosition.textContent = "LOWERING";
 
     }
 
-    else if (
-        command === "STOP"
-    ) {
+    else if (command === "STOP") {
 
-        armPosition.textContent =
-            "READY";
+        armPosition.textContent = "READY";
 
     }
 
@@ -228,7 +202,7 @@ function updateArmState(command) {
 
 
 // ==========================================
-// PRESS BUTTON
+// PRESS CONTROL BUTTON
 // ==========================================
 
 function pressButton(button) {
@@ -236,31 +210,28 @@ function pressButton(button) {
     const command =
         button.dataset.command;
 
-    if (!command) return;
+    if (!command) {
+        return;
+    }
 
-    activeCommand =
-        command;
+    activeCommand = command;
 
-    button.classList.add(
-        "pressed"
-    );
+    button.classList.add("pressed");
+
+    sendCommand(command);
 
     startHaptics();
 
-    sendCommand(
-        command
-    );
 }
+
+
 // ==========================================
-// RELEASE BUTTON
+// RELEASE CONTROL BUTTON
 // ==========================================
 
 function releaseButton(button) {
 
-    button.classList.remove(
-        "pressed"
-    );
-
+    button.classList.remove("pressed");
 
     stopRobot();
 
@@ -277,133 +248,97 @@ const buttons =
     );
 
 
-buttons.forEach(
-    button => {
+buttons.forEach(button => {
+
+    // Mouse down
+    button.addEventListener(
+        "mousedown",
+        event => {
+
+            event.preventDefault();
+
+            pressButton(button);
+
+        }
+    );
 
 
-        // ------------------------------
-        // MOUSE DOWN
-        // ------------------------------
+    // Mouse up
+    button.addEventListener(
+        "mouseup",
+        event => {
 
-        button.addEventListener(
-            "mousedown",
-            event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            releaseButton(button);
 
-                pressButton(
-                    button
-                );
-
-            }
-        );
+        }
+    );
 
 
-        // ------------------------------
-        // MOUSE UP
-        // ------------------------------
+    // Mouse leave
+    button.addEventListener(
+        "mouseleave",
+        () => {
 
-        button.addEventListener(
-            "mouseup",
-            event => {
+            if (activeCommand !== null) {
 
-                event.preventDefault();
-
-                releaseButton(
-                    button
-                );
-
-            }
-        );
-
-
-        // ------------------------------
-        // MOUSE LEAVE
-        // ------------------------------
-
-        button.addEventListener(
-            "mouseleave",
-            () => {
-
-                if (
-                    activeCommand !== null
-                ) {
-
-                    releaseButton(
-                        button
-                    );
-
-                }
+                releaseButton(button);
 
             }
-        );
+
+        }
+    );
 
 
-        // ------------------------------
-        // TOUCH START
-        // ------------------------------
+    // Touch start
+    button.addEventListener(
+        "touchstart",
+        event => {
 
-        button.addEventListener(
-            "touchstart",
-            event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            pressButton(button);
 
-                pressButton(
-                    button
-                );
-
-            },
-            {
-                passive: false
-            }
-        );
+        },
+        {
+            passive: false
+        }
+    );
 
 
-        // ------------------------------
-        // TOUCH END
-        // ------------------------------
+    // Touch end
+    button.addEventListener(
+        "touchend",
+        event => {
 
-        button.addEventListener(
-            "touchend",
-            event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            releaseButton(button);
 
-                releaseButton(
-                    button
-                );
-
-            },
-            {
-                passive: false
-            }
-        );
+        },
+        {
+            passive: false
+        }
+    );
 
 
-        // ------------------------------
-        // TOUCH CANCEL
-        // ------------------------------
+    // Touch cancel
+    button.addEventListener(
+        "touchcancel",
+        event => {
 
-        button.addEventListener(
-            "touchcancel",
-            event => {
+            event.preventDefault();
 
-                event.preventDefault();
+            releaseButton(button);
 
-                releaseButton(
-                    button
-                );
+        },
+        {
+            passive: false
+        }
+    );
 
-            },
-            {
-                passive: false
-            }
-        );
-
-
-    }
-);
+});
 
 
 // ==========================================
@@ -414,16 +349,11 @@ window.addEventListener(
     "blur",
     () => {
 
-        buttons.forEach(
-            button => {
+        buttons.forEach(button => {
 
-                button.classList.remove(
-                    "pressed"
-                );
+            button.classList.remove("pressed");
 
-            }
-        );
-
+        });
 
         stopRobot();
 
@@ -435,20 +365,13 @@ document.addEventListener(
     "visibilitychange",
     () => {
 
-        if (
-            document.hidden
-        ) {
+        if (document.hidden) {
 
-            buttons.forEach(
-                button => {
+            buttons.forEach(button => {
 
-                    button.classList.remove(
-                        "pressed"
-                    );
+                button.classList.remove("pressed");
 
-                }
-            );
-
+            });
 
             stopRobot();
 
@@ -463,15 +386,11 @@ document.addEventListener(
 // ==========================================
 
 const speedSlider =
-    document.getElementById(
-        "speedSlider"
-    );
+    document.getElementById("speedSlider");
 
 
 const speedValue =
-    document.getElementById(
-        "speedValue"
-    );
+    document.getElementById("speedValue");
 
 
 if (
@@ -484,14 +403,10 @@ if (
         () => {
 
             const speed =
-                Number(
-                    speedSlider.value
-                );
-
+                Number(speedSlider.value);
 
             speedValue.textContent =
                 `${speed}%`;
-
 
             console.log(
                 "RIK SPEED:",
@@ -509,155 +424,137 @@ if (
 // ==========================================
 
 const timerButton =
-    document.getElementById(
-        "timerButton"
-    );
+    document.getElementById("timerButton");
 
 
 const timerOverlay =
-    document.getElementById(
-        "timerOverlay"
-    );
+    document.getElementById("timerOverlay");
 
 
 const closeTimer =
-    document.getElementById(
-        "closeTimer"
-    );
+    document.getElementById("closeTimer");
 
 
 const startTimer =
-    document.getElementById(
-        "startTimer"
-    );
+    document.getElementById("startTimer");
 
 
 const resetTimer =
-    document.getElementById(
-        "resetTimer"
-    );
+    document.getElementById("resetTimer");
 
 
 const minutesInput =
-    document.getElementById(
-        "timerMinutes"
-    );
+    document.getElementById("timerMinutes");
 
 
 const secondsInput =
-    document.getElementById(
-        "timerSeconds"
-    );
+    document.getElementById("timerSeconds");
 
 
 const timerDisplay =
-    document.getElementById(
-        "timerDisplay"
-    );
+    document.getElementById("timerDisplay");
 
 
-let timerInterval =
-    null;
+const timerBigDisplay =
+    document.getElementById("timerBigDisplay");
 
 
-let remainingSeconds =
-    0;
+let timerInterval = null;
+
+let remainingSeconds = 0;
 
 
 // ==========================================
 // OPEN TIMER
 // ==========================================
 
-timerButton.addEventListener(
-    "click",
-    () => {
+if (
+    timerButton &&
+    timerOverlay
+) {
 
-        timerOverlay.classList.add(
-            "show"
-        );
+    timerButton.addEventListener(
+        "click",
+        () => {
 
-    }
-);
+            timerOverlay.classList.add("show");
+
+            updateTimerDisplay();
+
+        }
+    );
+
+}
 
 
 // ==========================================
 // CLOSE TIMER
 // ==========================================
 
-closeTimer.addEventListener(
-    "click",
-    () => {
+if (
+    closeTimer &&
+    timerOverlay
+) {
 
-        timerOverlay.classList.remove(
-            "show"
-        );
+    closeTimer.addEventListener(
+        "click",
+        () => {
 
-    }
-);
+            timerOverlay.classList.remove("show");
+
+        }
+    );
+
+}
 
 
 // ==========================================
 // CLICK OUTSIDE TIMER
 // ==========================================
 
-timerOverlay.addEventListener(
-    "click",
-    event => {
+if (timerOverlay) {
 
-        if (
-            event.target ===
-            timerOverlay
-        ) {
+    timerOverlay.addEventListener(
+        "click",
+        event => {
 
-            timerOverlay.classList.remove(
-                "show"
-            );
+            if (
+                event.target === timerOverlay
+            ) {
+
+                timerOverlay.classList.remove(
+                    "show"
+                );
+
+            }
 
         }
+    );
 
-    }
-);
+}
 
 
 // ==========================================
 // FORMAT TIMER
 // ==========================================
 
-function formatTime(
-    totalSeconds
-) {
+function formatTime(totalSeconds) {
 
     const minutes =
         Math.floor(
             totalSeconds / 60
         );
 
-
     const seconds =
         totalSeconds % 60;
 
-
     return (
 
-        String(
-            minutes
-        ).padStart(
-            2,
-            "0"
-        )
-
+        String(minutes).padStart(2, "0")
         +
-
         ":"
-
         +
-
-        String(
-            seconds
-        ).padStart(
-            2,
-            "0"
-        )
+        String(seconds).padStart(2, "0")
 
     );
 
@@ -665,18 +562,29 @@ function formatTime(
 
 
 // ==========================================
-// UPDATE TIMER
+// UPDATE TIMER DISPLAY
 // ==========================================
 
 function updateTimerDisplay() {
 
-    if (!timerDisplay) return;
-
-
-    timerDisplay.textContent =
+    const formattedTime =
         formatTime(
             remainingSeconds
         );
+
+    if (timerDisplay) {
+
+        timerDisplay.textContent =
+            formattedTime;
+
+    }
+
+    if (timerBigDisplay) {
+
+        timerBigDisplay.textContent =
+            formattedTime;
+
+    }
 
 }
 
@@ -685,108 +593,120 @@ function updateTimerDisplay() {
 // START TIMER
 // ==========================================
 
-startTimer.addEventListener(
-    "click",
-    () => {
+if (startTimer) {
+
+    startTimer.addEventListener(
+        "click",
+        () => {
+
+            if (
+                !minutesInput ||
+                !secondsInput
+            ) {
+
+                return;
+
+            }
+
+            let minutes =
+                Number(
+                    minutesInput.value
+                ) || 0;
+
+            let seconds =
+                Number(
+                    secondsInput.value
+                ) || 0;
 
 
-        let minutes =
-            Number(
-                minutesInput.value
-            ) || 0;
+            minutes =
+                Math.max(
+                    0,
+                    Math.min(
+                        59,
+                        minutes
+                    )
+                );
 
 
-        let seconds =
-            Number(
-                secondsInput.value
-            ) || 0;
+            seconds =
+                Math.max(
+                    0,
+                    Math.min(
+                        59,
+                        seconds
+                    )
+                );
 
 
-        minutes =
-            Math.max(
-                0,
-                Math.min(
-                    59,
-                    minutes
-                )
+            remainingSeconds =
+                (minutes * 60) + seconds;
+
+
+            if (
+                remainingSeconds <= 0
+            ) {
+
+                return;
+
+            }
+
+
+            clearInterval(
+                timerInterval
             );
 
 
-        seconds =
-            Math.max(
-                0,
-                Math.min(
-                    59,
-                    seconds
-                )
-            );
+            timerInterval = null;
 
 
-        remainingSeconds =
-            (minutes * 60)
-            +
-            seconds;
+            updateTimerDisplay();
 
 
-        if (
-            remainingSeconds <= 0
-        ) {
+            if (timerOverlay) {
 
-            return;
+                timerOverlay.classList.remove(
+                    "show"
+                );
+
+            }
+
+
+            timerInterval =
+                setInterval(
+                    () => {
+
+                        remainingSeconds--;
+
+                        updateTimerDisplay();
+
+
+                        if (
+                            remainingSeconds <= 0
+                        ) {
+
+                            clearInterval(
+                                timerInterval
+                            );
+
+                            timerInterval = null;
+
+                            remainingSeconds = 0;
+
+                            updateTimerDisplay();
+
+                            timerFinished();
+
+                        }
+
+                    },
+                    1000
+                );
 
         }
+    );
 
-
-        clearInterval(
-            timerInterval
-        );
-
-
-        updateTimerDisplay();
-
-
-        timerOverlay.classList.remove(
-            "show"
-        );
-
-
-        timerInterval =
-            setInterval(
-                () => {
-
-                    remainingSeconds--;
-
-
-                    updateTimerDisplay();
-
-
-                    if (
-                        remainingSeconds <= 0
-                    ) {
-
-                        clearInterval(
-                            timerInterval
-                        );
-
-
-                        remainingSeconds =
-                            0;
-
-
-                        timerDisplay.textContent =
-                            "DONE";
-
-
-                        timerFinished();
-
-                    }
-
-                },
-                1000
-            );
-
-    }
-);
+}
 
 
 // ==========================================
@@ -815,24 +735,21 @@ function timerFinished() {
 
 
     if (
-        navigator.vibrate
+        "vibrate" in navigator
     ) {
 
-        navigator.vibrate(
-            [
-                200,
-                100,
-                200
-            ]
-        );
+        navigator.vibrate([
+            200,
+            100,
+            200
+        ]);
 
     }
 
 
     if (
         "Notification" in window &&
-        Notification.permission ===
-        "granted"
+        Notification.permission === "granted"
     ) {
 
         new Notification(
@@ -852,47 +769,545 @@ function timerFinished() {
 // RESET TIMER
 // ==========================================
 
-resetTimer.addEventListener(
-    "click",
-    () => {
+if (resetTimer) {
 
-        clearInterval(
-            timerInterval
+    resetTimer.addEventListener(
+        "click",
+        () => {
+
+            clearInterval(
+                timerInterval
+            );
+
+            timerInterval = null;
+
+            remainingSeconds = 0;
+
+            updateTimerDisplay();
+
+
+            if (minutesInput) {
+
+                minutesInput.value = 0;
+
+            }
+
+
+            if (secondsInput) {
+
+                secondsInput.value = 30;
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// AUTO-HIDE NAVIGATION
+// ==========================================
+
+const rikNavigation =
+    document.getElementById(
+        "rikNavigation"
+    );
+
+
+const navRevealZone =
+    document.getElementById(
+        "navRevealZone"
+    );
+
+
+let navHideTimer = null;
+
+
+const TOUCH_REVEAL_DISTANCE = 35;
+
+
+// ==========================================
+// SHOW NAVIGATION
+// ==========================================
+
+function showNavigation() {
+
+    if (!rikNavigation) {
+        return;
+    }
+
+    clearTimeout(navHideTimer);
+
+    rikNavigation.classList.add(
+        "nav-visible"
+    );
+
+    navHideTimer =
+        setTimeout(
+            () => {
+
+                hideNavigation();
+
+            },
+            2200
         );
 
-
-        remainingSeconds =
-            0;
+}
 
 
-        updateTimerDisplay();
+// ==========================================
+// HIDE NAVIGATION
+// ==========================================
+
+function hideNavigation() {
+
+    if (!rikNavigation) {
+        return;
+    }
+
+    if (
+        rikNavigation.matches(":hover")
+    ) {
+
+        return;
+
+    }
+
+    rikNavigation.classList.remove(
+        "nav-visible"
+    );
+
+}
 
 
-        minutesInput.value =
-            0;
+// ==========================================
+// DELAYED NAV HIDE
+// ==========================================
+
+function scheduleNavHide() {
+
+    clearTimeout(navHideTimer);
+
+    navHideTimer =
+        setTimeout(
+            () => {
+
+                hideNavigation();
+
+            },
+            900
+        );
+
+}
 
 
-        secondsInput.value =
-            30;
+// ==========================================
+// NAV REVEAL ZONE
+// ==========================================
 
+if (navRevealZone) {
+
+    navRevealZone.addEventListener(
+        "mouseenter",
+        () => {
+
+            showNavigation();
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// NAV MOUSE EVENTS
+// ==========================================
+
+if (rikNavigation) {
+
+    rikNavigation.addEventListener(
+        "mouseenter",
+        () => {
+
+            clearTimeout(navHideTimer);
+
+            rikNavigation.classList.add(
+                "nav-visible"
+            );
+
+        }
+    );
+
+
+    rikNavigation.addEventListener(
+        "mouseleave",
+        () => {
+
+            scheduleNavHide();
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// MOUSE NAV REVEAL
+// ONLY VERY CLOSE TO BOTTOM CENTRE
+// ==========================================
+
+document.addEventListener(
+    "pointermove",
+    event => {
+
+        if (
+            event.pointerType === "touch"
+        ) {
+
+            return;
+
+        }
+
+
+        const bottomDistance =
+            window.innerHeight -
+            event.clientY;
+
+
+        const screenCenter =
+            window.innerWidth / 2;
+
+
+        const distanceFromCenter =
+            Math.abs(
+                event.clientX -
+                screenCenter
+            );
+
+
+        const isBottom =
+            bottomDistance <= 25;
+
+
+        const isCenter =
+            distanceFromCenter <= 100;
+
+
+        if (
+            isBottom &&
+            isCenter
+        ) {
+
+            showNavigation();
+
+        }
+
+    },
+    {
+        passive: true
     }
 );
 
 
 // ==========================================
+// TOUCH NAV REVEAL
+// ONLY VERY CLOSE TO BOTTOM CENTRE
+// ==========================================
+
+document.addEventListener(
+    "touchstart",
+    event => {
+
+        const touch =
+            event.touches[0];
+
+
+        if (!touch) {
+            return;
+        }
+
+
+        const distanceFromBottom =
+            window.innerHeight -
+            touch.clientY;
+
+
+        const screenCenter =
+            window.innerWidth / 2;
+
+
+        const distanceFromCenter =
+            Math.abs(
+                touch.clientX -
+                screenCenter
+            );
+
+
+        const isBottom =
+            distanceFromBottom <=
+            TOUCH_REVEAL_DISTANCE;
+
+
+        const isCenter =
+            distanceFromCenter <= 110;
+
+
+        if (
+            isBottom &&
+            isCenter
+        ) {
+
+            showNavigation();
+
+        }
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+// ==========================================
+// PAGE ELEMENTS
+// ==========================================
+
+const controlPage =
+    document.getElementById(
+        "controlPage"
+    );
+
+
+const settingsPage =
+    document.getElementById(
+        "settingsPage"
+    );
+
+
+const demoPage =
+    document.getElementById(
+        "demoPage"
+    );
+
+
+const labPage =
+    document.getElementById(
+        "labPage"
+    );
+
+
+// ==========================================
+// PAGE SWITCHING
+// ==========================================
+
+function showPage(page) {
+
+    // Hide all pages
+    if (controlPage) {
+
+        controlPage.style.display =
+            "none";
+
+    }
+
+
+    if (settingsPage) {
+
+        settingsPage.style.display =
+            "none";
+
+    }
+
+
+    if (demoPage) {
+
+        demoPage.style.display =
+            "none";
+
+    }
+
+
+    if (labPage) {
+
+        labPage.style.display =
+            "none";
+
+    }
+
+
+    // Show requested page
+    if (
+        page === "control" &&
+        controlPage
+    ) {
+
+        controlPage.style.display =
+            "block";
+
+    }
+
+
+    else if (
+        page === "settings" &&
+        settingsPage
+    ) {
+
+        settingsPage.style.display =
+            "block";
+
+    }
+
+
+    else if (
+        page === "demo" &&
+        demoPage
+    ) {
+
+        demoPage.style.display =
+            "block";
+
+    }
+
+
+    else if (
+        page === "lab" &&
+        labPage
+    ) {
+
+        labPage.style.display =
+            "block";
+
+    }
+
+
+    console.log(
+        "RIK PAGE:",
+        page
+    );
+
+}
+
+
+// ==========================================
+// NAVIGATION BUTTONS
+// ==========================================
+
+if (rikNavigation) {
+
+    const navItems =
+        rikNavigation.querySelectorAll(
+            ".nav-item"
+        );
+
+
+    navItems.forEach(
+        item => {
+
+            item.addEventListener(
+                "click",
+                () => {
+
+                    navItems.forEach(
+                        button => {
+
+                            button.classList.remove(
+                                "active"
+                            );
+
+                        }
+                    );
+
+
+                    item.classList.add(
+                        "active"
+                    );
+
+
+                    const page =
+                        item.dataset.page;
+
+
+                    showPage(page);
+
+
+                    showNavigation();
+
+                }
+            );
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// BUTTON SIZE SETTING
+// ==========================================
+
+const buttonSizeSlider =
+    document.getElementById(
+        "buttonSizeSlider"
+    );
+
+
+const buttonSizeValue =
+    document.getElementById(
+        "buttonSizeValue"
+    );
+
+
+function updateButtonSize() {
+
+    if (!buttonSizeSlider) {
+
+        return;
+
+    }
+
+
+    const size =
+        Number(
+            buttonSizeSlider.value
+        );
+
+
+    if (buttonSizeValue) {
+
+        buttonSizeValue.textContent =
+            `${size}%`;
+
+    }
+
+
+    document.documentElement.style
+        .setProperty(
+            "--rik-button-scale",
+            size / 100
+        );
+
+}
+
+
+if (buttonSizeSlider) {
+
+    buttonSizeSlider.addEventListener(
+        "input",
+        updateButtonSize
+    );
+
+
+    updateButtonSize();
+
+}
+
+
+// ==========================================
 // SENSOR DEMO
-//
-// Temporary only.
-// Later ESP32 data will replace this.
 // ==========================================
 
 function updateDemoSensors() {
-
-    /*
-       These are NOT real sensor readings.
-       They simply make the UI useful
-       while we are developing it.
-    */
 
     const soilValue =
         document.getElementById(
@@ -938,44 +1353,268 @@ function updateDemoSensors() {
 }
 
 
-// Run once.
+// ==========================================
+// INITIALIZE
+// ==========================================
 
 updateDemoSensors();
-// ==========================================
-// RIK PWA SERVICE WORKER
-// ==========================================
 
-if ("serviceWorker" in navigator) {
+updateTimerDisplay();
+
+
+// Start on Controller
+
+showPage("control");
+
+
+// Make Control active
+
+if (rikNavigation) {
+
+    const navItems =
+        rikNavigation.querySelectorAll(
+            ".nav-item"
+        );
+
+
+    navItems.forEach(
+        item => {
+
+            item.classList.toggle(
+                "active",
+                item.dataset.page === "control"
+            );
+
+        }
+    );
+
+
+    rikNavigation.classList.remove(
+        "nav-visible"
+    );
+
+}/* =========================================================
+   RIK PWA SERVICE WORKER
+   ========================================================= */
+
+if (
+    "serviceWorker" in navigator
+) {
 
     window.addEventListener(
         "load",
         () => {
 
-            navigator.serviceWorker.register(
-                "/sw.js"
-            )
-            .then(
-                registration => {
+            navigator.serviceWorker
+                .register("./sw.js")
+                .then(
+                    registration => {
+
+                        console.log(
+                            "RIK Service Worker registered:",
+                            registration.scope
+                        );
+
+                    }
+                )
+                .catch(
+                    error => {
+
+                        console.error(
+                            "RIK Service Worker registration failed:",
+                            error
+                        );
+
+                    }
+                );
+
+        }
+    );
+
+}/* =========================================================
+   RIK PWA INSTALL
+   ========================================================= */
+
+let deferredInstallPrompt = null;
+
+
+/* =========================================================
+   INSTALL ELEMENTS
+   ========================================================= */
+
+const installCard =
+    document.getElementById("installCard");
+
+const installButton =
+    document.getElementById("installAppButton");
+
+
+/* =========================================================
+   KEEP INSTALL CARD VISIBLE
+   ========================================================= */
+
+if (installCard) {
+
+    installCard.style.display = "flex";
+
+}
+
+
+/* =========================================================
+   BROWSER INSTALL PROMPT
+   ========================================================= */
+
+window.addEventListener(
+    "beforeinstallprompt",
+    event => {
+
+        console.log(
+            "RIK: Install prompt available."
+        );
+
+
+        event.preventDefault();
+
+
+        deferredInstallPrompt = event;
+
+    }
+);
+
+
+/* =========================================================
+   INSTALL BUTTON
+   ========================================================= */
+
+if (installButton) {
+
+    installButton.addEventListener(
+        "click",
+        async () => {
+
+
+            /* -----------------------------------------
+               NATIVE INSTALL PROMPT AVAILABLE
+            ----------------------------------------- */
+
+            if (deferredInstallPrompt) {
+
+                try {
+
+                    await deferredInstallPrompt.prompt();
+
+
+                    const result =
+                        await deferredInstallPrompt.userChoice;
+
 
                     console.log(
-                        "RIK PWA: Service worker registered",
-                        registration
+                        "RIK install result:",
+                        result.outcome
                     );
 
-                }
-            )
-            .catch(
-                error => {
+
+                    deferredInstallPrompt = null;
+
+
+                } catch (error) {
 
                     console.error(
-                        "RIK PWA: Service worker failed",
+                        "RIK install error:",
                         error
                     );
 
                 }
+
+
+                return;
+
+            }
+
+
+
+            /* -----------------------------------------
+               CHECK IF ALREADY INSTALLED
+            ----------------------------------------- */
+
+            const isStandalone =
+                window.matchMedia(
+                    "(display-mode: standalone)"
+                ).matches ||
+                window.navigator.standalone === true;
+
+
+            if (isStandalone) {
+
+                alert(
+                    "RIK is already installed on this device."
+                );
+
+                return;
+
+            }
+
+
+
+            /* -----------------------------------------
+               iPHONE / iPAD
+            ----------------------------------------- */
+
+            const isIOS =
+                /iphone|ipad|ipod/i.test(
+                    navigator.userAgent
+                );
+
+
+            if (isIOS) {
+
+                alert(
+                    "To install RIK on iPhone or iPad:\n\n" +
+                    "1. Open RIK in Safari.\n" +
+                    "2. Tap the Share button.\n" +
+                    "3. Select 'Add to Home Screen'.\n" +
+                    "4. Tap 'Add'."
+                );
+
+                return;
+
+            }
+
+
+
+            /* -----------------------------------------
+               ANDROID / DESKTOP FALLBACK
+            ----------------------------------------- */
+
+            alert(
+                "RIK cannot open the automatic install prompt " +
+                "in this browser right now.\n\n" +
+                "Open your browser menu and look for:\n\n" +
+                "• Install RIK\n" +
+                "• Install app\n" +
+                "• Add to Home screen"
             );
 
         }
     );
 
 }
+
+
+/* =========================================================
+   APP INSTALLED
+   ========================================================= */
+
+window.addEventListener(
+    "appinstalled",
+    () => {
+
+        console.log(
+            "RIK has been installed successfully."
+        );
+
+
+        deferredInstallPrompt = null;
+
+    }
+);  
