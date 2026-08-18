@@ -3708,4 +3708,400 @@ body:has(.rik-nav:hover) .rik-nav {
         width: 100%;
     }
 
-} 
+} /* =========================================================
+   RIK SELF-ADJUSTING CONTROLLER
+   Automatically fits movement + arm/claw controls
+   to the available screen size.
+   ========================================================= */
+
+:root {
+    --rik-control-size: clamp(
+        64px,
+        min(13vw, 10vh),
+        150px
+    );
+
+    --rik-action-size: clamp(
+        90px,
+        min(17vw, 15vh),
+        190px
+    );
+
+    --rik-control-gap: clamp(
+        8px,
+        min(1.5vw, 1.5vh),
+        24px
+    );
+}
+
+
+/* =========================================================
+   MOVEMENT PANEL
+   ========================================================= */
+
+.movement-panel,
+.movement,
+#movementPanel {
+
+    min-height: 0 !important;
+
+    height: auto;
+
+    overflow: hidden;
+
+    display: flex;
+
+    flex-direction: column;
+
+    box-sizing: border-box;
+
+}
+
+
+/* =========================================================
+   MOVEMENT CONTROLS
+   ========================================================= */
+
+.movement-controls {
+
+    width: 100%;
+
+    height: 100%;
+
+    min-height: 0;
+
+    display: grid;
+
+    grid-template-columns:
+        var(--rik-control-size)
+        var(--rik-control-size)
+        var(--rik-control-size);
+
+    grid-template-rows:
+        var(--rik-control-size)
+        var(--rik-control-size)
+        var(--rik-control-size);
+
+    gap: var(--rik-control-gap);
+
+    justify-content: center;
+
+    align-items: center;
+
+    place-content: center;
+
+    box-sizing: border-box;
+
+}
+
+
+/* =========================================================
+   MOVEMENT BUTTONS
+   ========================================================= */
+
+.movement-controls .control-button {
+
+    width:
+        var(--rik-control-size);
+
+    height:
+        var(--rik-control-size);
+
+    min-width: 0;
+
+    min-height: 0;
+
+    max-width: none;
+
+    max-height: none;
+
+    padding: 8px;
+
+    box-sizing: border-box;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+}
+
+
+/* =========================================================
+   MOVEMENT POSITIONS
+   ========================================================= */
+
+.movement-controls
+.control-button[data-command="FORWARD"] {
+
+    grid-column: 2;
+
+    grid-row: 1;
+
+}
+
+
+.movement-controls
+.control-button[data-command="LEFT"] {
+
+    grid-column: 1;
+
+    grid-row: 2;
+
+}
+
+
+.movement-controls
+.control-button[data-command="RIGHT"] {
+
+    grid-column: 3;
+
+    grid-row: 2;
+
+}
+
+
+.movement-controls
+.control-button[data-command="BACKWARD"] {
+
+    grid-column: 2;
+
+    grid-row: 3;
+
+}
+
+
+/* =========================================================
+   CENTRE STOP / JOYSTICK INDICATOR
+   ========================================================= */
+
+.movement-controls
+.center-control,
+.movement-controls
+.stop-control,
+.movement-controls
+.control-center {
+
+    width:
+        calc(var(--rik-control-size) * 0.42);
+
+    height:
+        calc(var(--rik-control-size) * 0.42);
+
+    min-width: 0;
+
+    min-height: 0;
+
+    grid-column: 2;
+
+    grid-row: 2;
+
+    justify-self: center;
+
+    align-self: center;
+
+    z-index: 2;
+
+}
+
+
+/* =========================================================
+   ARM & CLAW GRID
+   ========================================================= */
+
+.arm-claw-controls,
+.arm-claw-grid,
+#armClawControls {
+
+    min-height: 0;
+
+    width: 100%;
+
+    height: 100%;
+
+    display: grid;
+
+    grid-template-columns: repeat(2, 1fr);
+
+    grid-template-rows: repeat(2, 1fr);
+
+    gap: var(--rik-control-gap);
+
+    box-sizing: border-box;
+
+}
+
+
+/* =========================================================
+   ARM / CLAW BUTTONS
+   ========================================================= */
+
+.arm-claw-controls .action-button,
+.arm-claw-grid .action-button,
+#armClawControls .action-button {
+
+    width: 100%;
+
+    height: 100%;
+
+    min-width: 0;
+
+    min-height: 0;
+
+    max-width: none;
+
+    max-height: none;
+
+    box-sizing: border-box;
+
+    padding:
+        clamp(8px, 1.5vw, 20px);
+
+}
+
+
+/* =========================================================
+   MOBILE — PORTRAIT
+   ========================================================= */
+
+@media (orientation: portrait) and
+       (max-width: 700px) {
+
+    :root {
+
+        --rik-control-size:
+            clamp(
+                58px,
+                min(18vw, 9vh),
+                100px
+            );
+
+        --rik-action-size:
+            clamp(
+                75px,
+                min(24vw, 15vh),
+                130px
+            );
+
+        --rik-control-gap:
+            clamp(
+                6px,
+                1.5vw,
+                14px
+            );
+
+    }
+
+
+    .movement-controls {
+
+        grid-template-columns:
+            var(--rik-control-size)
+            var(--rik-control-size)
+            var(--rik-control-size);
+
+        grid-template-rows:
+            var(--rik-control-size)
+            var(--rik-control-size)
+            var(--rik-control-size);
+
+    }
+
+}
+
+
+/* =========================================================
+   VERY SHORT MOBILE SCREENS
+   ========================================================= */
+
+@media (max-height: 700px) {
+
+    :root {
+
+        --rik-control-size:
+            clamp(
+                52px,
+                8vh,
+                90px
+            );
+
+        --rik-control-gap:
+            clamp(
+                5px,
+                1vh,
+                10px
+            );
+
+    }
+
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 390px) {
+
+    :root {
+
+        --rik-control-size:
+            clamp(
+                50px,
+                17vw,
+                78px
+            );
+
+        --rik-control-gap:
+            6px;
+
+    }
+
+
+    .movement-controls
+    .control-button {
+
+        padding: 5px;
+
+    }
+
+}
+
+
+/* =========================================================
+   PREVENT BUTTONS FROM CAUSING PAGE OVERFLOW
+   ========================================================= */
+
+.control-button,
+.action-button {
+
+    flex-shrink: 1;
+
+    box-sizing: border-box;
+
+}
+
+
+/* =========================================================
+   MOBILE SAFE AREA
+   ========================================================= */
+
+@supports (
+    padding-bottom:
+    env(safe-area-inset-bottom)
+) {
+
+    .control-panel,
+    .movement-panel,
+    .arm-claw-panel {
+
+        padding-bottom:
+            max(
+                8px,
+                env(safe-area-inset-bottom)
+            );
+
+    }
+
+}
