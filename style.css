@@ -3710,347 +3710,647 @@ body:has(.rik-nav:hover) .rik-nav {
 
 }
 
-/* =========================================================
-   RIK — FINAL RESPONSIVE CONTROL-SIZE FIX
-   ---------------------------------------------------------
-   The Settings > Button Size slider controls
-   --rik-button-scale (80% -> 130%).
 
-   This final block intentionally sits at the end of the file
-   so it wins over older/duplicate responsive rules.
+
+/* =========================================================
+   RIK FINAL CONTROL SYSTEM
+   - True viewport fitting
+   - Thumb-friendly controls
+   - Button-size slider remains functional
+   - Prevents clipped BACKWARD / ARM / CLAW controls
+   - More tactile / lively button interaction
    ========================================================= */
 
-/* -------------------------
-   SCALE TOKENS
-   ------------------------- */
 :root {
-    --rik-button-base: 100px;
-    --rik-button-min: 80px;
-    --rik-button-max: 125px;
-
-    --rik-action-base: 80px;
-    --rik-icon-base: 30px;
+    --rik-button-scale: 1;
+    --rik-control-gap: clamp(5px, 1.1vmin, 10px);
 }
 
-/* -------------------------
-   MOVEMENT BUTTONS
-   ------------------------- */
+
+/* =========================================================
+   VIEWPORT / FRAME
+   ========================================================= */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+body {
+    overscroll-behavior: none;
+}
+
+#app {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding:
+        max(8px, env(safe-area-inset-top))
+        max(10px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom))
+        max(10px, env(safe-area-inset-left));
+    gap: clamp(7px, 1.2vmin, 12px);
+}
+
+
+/* =========================================================
+   MAIN CONTROL FRAME
+   ========================================================= */
+
+.controls-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1.18fr)
+        minmax(0, 0.92fr);
+
+    gap: clamp(7px, 1.2vmin, 12px);
+}
+
+.control-panel {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   MOVEMENT FRAME
+   ========================================================= */
+
+.movement-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.movement-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* =========================================================
+   SELF-FITTING MOVEMENT PAD
+   The pad is square so all 4 directions always remain
+   inside the available frame.
+   ========================================================= */
+
 .movement-pad {
-    /*
-     * Keep the pad fluid. The buttons themselves are capped
-     * by their grid cell so 130% cannot push the pad outside
-     * the panel on phones.
-     */
-    width: min(440px, 92%);
-    max-width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-}
+    flex: 0 1 auto;
 
-.control-button {
     width: min(
-        calc(100% - 4px),
-        calc(var(--rik-button-base) * var(--rik-button-scale))
+        100%,
+        62vh,
+        440px
     );
 
-    height: min(
-        calc(100% - 4px),
-        calc(var(--rik-button-base) * var(--rik-button-scale))
-    );
+    height: auto;
+    aspect-ratio: 1 / 1;
 
     min-width: 0;
     min-height: 0;
-    max-width: none;
-    max-height: none;
+
+    margin: auto;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+
+    grid-template-rows:
+        repeat(3, minmax(0, 1fr));
+
+    gap: var(--rik-control-gap);
+
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   MOVEMENT BUTTONS
+   Slider controls the size, but the frame always wins.
+   ========================================================= */
+
+.movement-pad .control-button {
+    width: min(
+        100%,
+        calc(100% * var(--rik-button-scale))
+    ) !important;
+
+    height: min(
+        100%,
+        calc(100% * var(--rik-button-scale))
+    ) !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    max-width: 100% !important;
+    max-height: 100% !important;
+
+    justify-self: center;
+    align-self: center;
+
+    box-sizing: border-box;
 
     border-radius:
-        calc(22px * var(--rik-button-scale));
+        clamp(
+            14px,
+            2.8vmin,
+            24px
+        ) !important;
 
-    gap:
-        calc(5px * var(--rik-button-scale));
+    padding: 5px !important;
+
+    gap: clamp(2px, 0.6vmin, 6px);
+
+    /* Tactile depth */
+    box-shadow:
+        0 7px 16px rgba(0,0,0,0.07),
+        inset 0 1px 0 rgba(255,255,255,0.98);
+
+    transition:
+        transform 110ms cubic-bezier(.2,.8,.2,1),
+        box-shadow 140ms ease,
+        background 140ms ease;
 }
 
-.control-button > span {
+.movement-pad .control-button > span {
+    width: auto !important;
+    height: auto !important;
+
+    font-size:
+        clamp(
+            22px,
+            4.2vmin,
+            34px
+        ) !important;
+
+    line-height: 1 !important;
+}
+
+.movement-pad .control-button small {
+    font-size:
+        clamp(
+            5px,
+            1.05vmin,
+            8px
+        ) !important;
+
+    line-height: 1;
+}
+
+
+/* =========================================================
+   CENTER STOP INDICATOR
+   ========================================================= */
+
+.movement-center {
     width:
-        calc(34px * var(--rik-button-scale));
+        clamp(
+            30px,
+            7vmin,
+            48px
+        );
 
     height:
-        calc(34px * var(--rik-button-scale));
+        clamp(
+            30px,
+            7vmin,
+            48px
+        );
 
-    font-size:
-        calc(26px * var(--rik-button-scale));
+    justify-self: center;
+    align-self: center;
 }
 
-.control-button small {
-    font-size:
-        max(6px, calc(7px * var(--rik-button-scale)));
+
+/* =========================================================
+   LIVELY / TACTILE BUTTON FEEDBACK
+   ========================================================= */
+
+@media (hover: hover) {
+
+    .movement-pad .control-button:hover {
+        transform: translateY(-2px) scale(1.015);
+    }
+
+    .action-button:hover {
+        transform: translateY(-2px);
+    }
 }
 
-/* -------------------------
-   ARM / CLAW BUTTONS
-   ------------------------- */
-.arm-controls,
-.claw-controls {
+.movement-pad .control-button:active,
+.movement-pad .control-button.pressed {
+    transform: scale(0.93) !important;
+
+    box-shadow:
+        0 3px 8px rgba(0,0,0,0.08),
+        inset 0 2px 5px rgba(0,0,0,0.06);
+
+    background:
+        rgba(255,255,255,0.98);
+}
+
+.movement-pad .control-button.pressed::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+
+    box-shadow:
+        inset 0 0 0 2px rgba(53,199,89,0.20);
+}
+
+
+/* =========================================================
+   SPEED CONTROL
+   ========================================================= */
+
+.speed-control {
+    flex: 0 0 auto;
+
+    width:
+        min(
+            100%,
+            360px
+        ) !important;
+
+    margin:
+        clamp(2px, 0.5vmin, 5px) auto 0 !important;
+}
+
+#speedSlider {
+    touch-action: pan-x;
+}
+
+
+/* =========================================================
+   ARM + CLAW FRAME
+   ========================================================= */
+
+.arm-claw-panel {
+    min-height: 0;
     display: flex;
-    gap: 10px;
-    min-width: 0;
+    flex-direction: column;
 }
 
-.action-button {
+.arm-claw-grid {
+    flex: 1 1 auto;
+
+    min-height: 0;
     min-width: 0;
 
-    min-height:
-        calc(var(--rik-action-base) * var(--rik-button-scale));
+    display: grid;
 
-    border-radius:
-        calc(20px * var(--rik-button-scale));
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
 
     gap:
-        calc(9px * var(--rik-button-scale));
+        clamp(7px, 1.1vmin, 12px);
+
+    overflow: hidden;
 }
 
-.action-button > span {
+.sub-control {
+    min-width: 0;
+    min-height: 0;
+
+    display: grid;
+
+    grid-template-rows:
+        auto minmax(0, 1fr) minmax(0, 1fr);
+
+    gap:
+        clamp(5px, 0.9vmin, 9px);
+}
+
+.sub-title {
+    flex: 0 0 auto;
+}
+
+
+/* =========================================================
+   ARM / CLAW BUTTONS
+   ========================================================= */
+
+.arm-claw-grid .action-button {
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    width: 100%;
+    height: 100%;
+
+    box-sizing: border-box;
+
+    border-radius:
+        clamp(
+            14px,
+            2.4vmin,
+            22px
+        );
+
+    padding:
+        clamp(
+            5px,
+            1.2vmin,
+            12px
+        );
+
+    gap:
+        clamp(
+            5px,
+            1.2vmin,
+            10px
+        );
+
+    box-shadow:
+        0 7px 16px rgba(0,0,0,0.055),
+        inset 0 1px 0 rgba(255,255,255,0.98);
+
+    transition:
+        transform 110ms cubic-bezier(.2,.8,.2,1),
+        box-shadow 140ms ease,
+        background 140ms ease;
+}
+
+.arm-claw-grid .action-button > span {
     width:
-        calc(42px * var(--rik-button-scale));
+        clamp(
+            28px,
+            5vmin,
+            46px
+        ) !important;
 
     height:
-        calc(42px * var(--rik-button-scale));
+        clamp(
+            28px,
+            5vmin,
+            46px
+        ) !important;
 
     flex:
-        0 0 calc(42px * var(--rik-button-scale));
+        0 0 clamp(
+            28px,
+            5vmin,
+            46px
+        ) !important;
 
     font-size:
-        calc(var(--rik-icon-base) * var(--rik-button-scale));
+        clamp(
+            21px,
+            4vmin,
+            32px
+        ) !important;
 }
 
-.action-button.arm-up > span,
-.action-button.arm-down > span,
-.action-button.claw-open > span,
-.action-button.claw-close > span {
+.arm-claw-grid .action-button strong {
     font-size:
-        calc(var(--rik-icon-base) * var(--rik-button-scale));
+        clamp(
+            7px,
+            1.25vmin,
+            10px
+        ) !important;
 }
 
-.action-button strong {
-    font-size:
-        max(8px, calc(9px * var(--rik-button-scale)));
+
+/* Active arm/claw feedback */
+
+.arm-claw-grid .action-button:active,
+.arm-claw-grid .action-button.pressed {
+    transform: scale(0.94) !important;
+
+    box-shadow:
+        0 3px 8px rgba(0,0,0,0.07),
+        inset 0 2px 5px rgba(0,0,0,0.05);
 }
 
-/* -------------------------
-   PRESS FEEDBACK
-   ------------------------- */
-.control-button:active,
-.action-button:active,
-.control-button.pressed,
-.action-button.pressed {
-    transform:
-        scale(0.96);
-}
 
-/* -------------------------
-   TABLET / SMALL LAPTOP
-   ------------------------- */
-@media (max-width: 900px) {
+/* =========================================================
+   LANDSCAPE PHONE / TABLET
+   ========================================================= */
 
-    .controls-area {
-        grid-template-columns:
-            1fr;
-    }
-
-    .arm-claw-panel {
-        min-height:
-            260px;
-    }
-
-    .movement-pad {
-        width:
-            min(420px, 94%);
-    }
-}
-
-/* -------------------------
-   PHONE
-   ------------------------- */
-@media (max-width: 700px) {
+@media (orientation: landscape) and (max-height: 850px) {
 
     #app {
         padding:
-            8px 10px;
-        gap:
-            8px;
-    }
+            max(5px, env(safe-area-inset-top))
+            max(8px, env(safe-area-inset-right))
+            max(5px, env(safe-area-inset-bottom))
+            max(8px, env(safe-area-inset-left));
 
-    .controls-area {
-        gap:
-            8px;
-    }
-
-    .control-panel {
-        padding:
-            12px;
-        border-radius:
-            20px;
-    }
-
-    .movement-pad {
-        width:
-            min(360px, 96%);
-        gap:
-            7px;
-    }
-
-    .arm-controls,
-    .claw-controls {
-        gap:
-            8px;
-    }
-
-    .action-button {
-        min-height:
-            calc(72px * var(--rik-button-scale));
-    }
-}
-
-/* -------------------------
-   SHORT / LANDSCAPE PHONE
-   ------------------------- */
-@media (max-height: 650px) {
-
-    #app {
-        padding:
-            7px 10px;
-        gap:
-            6px;
+        gap: 6px;
     }
 
     .controller-topbar {
-        height:
-            46px;
+        height: clamp(38px, 7vh, 48px);
+        min-height: clamp(38px, 7vh, 48px);
+        padding: 5px 10px;
+        gap: clamp(8px, 2.4vw, 20px);
+        border-radius: 15px;
     }
 
-    .sensor-card {
-        min-height:
-            54px;
-    }
+    .controls-area {
+        grid-template-columns:
+            minmax(0, 1.16fr)
+            minmax(0, 0.84fr);
 
-    .movement-pad {
-        width:
-            min(390px, 92%);
-        gap:
-            6px;
-    }
-
-    .control-button {
-        width: min(
-            calc(100% - 3px),
-            calc(82px * var(--rik-button-scale))
-        );
-
-        height: min(
-            calc(100% - 3px),
-            calc(82px * var(--rik-button-scale))
-        );
-    }
-
-    .action-button {
-        min-height:
-            calc(62px * var(--rik-button-scale));
-    }
-
-    .action-button > span {
-        width:
-            calc(36px * var(--rik-button-scale));
-
-        height:
-            calc(36px * var(--rik-button-scale));
-
-        flex-basis:
-            calc(36px * var(--rik-button-scale));
-    }
-}
-
-/* -------------------------
-   VERY SMALL PHONES
-   ------------------------- */
-@media (max-width: 380px) {
-
-    #app {
-        padding:
-            6px 8px;
-        gap:
-            6px;
+        gap: 7px;
     }
 
     .control-panel {
-        padding:
-            9px;
-        border-radius:
-            18px;
+        padding: clamp(7px, 1.4vmin, 12px);
+        border-radius: 18px;
     }
 
     .movement-pad {
         width:
-            100%;
+            min(
+                58vh,
+                88%,
+                310px
+            );
+
         gap:
-            5px;
+            clamp(
+                4px,
+                1vh,
+                8px
+            );
     }
 
-    .control-button {
-        width: min(
-            calc(100% - 2px),
-            calc(76px * var(--rik-button-scale))
-        );
-
-        height: min(
-            calc(100% - 2px),
-            calc(76px * var(--rik-button-scale))
-        );
-    }
-
-    .arm-controls,
-    .claw-controls {
-        gap:
-            6px;
-    }
-
-    .action-button {
-        min-height:
-            calc(60px * var(--rik-button-scale));
-        gap:
-            5px;
-    }
-
-    .action-button > span {
+    .speed-control {
         width:
-            calc(32px * var(--rik-button-scale));
-
-        height:
-            calc(32px * var(--rik-button-scale));
-
-        flex-basis:
-            calc(32px * var(--rik-button-scale));
+            min(
+                88%,
+                300px
+            ) !important;
     }
 
-    .action-button strong {
-        font-size:
-            max(7px, calc(8px * var(--rik-button-scale)));
+    .arm-claw-grid {
+        gap: 6px;
+    }
+
+    .sub-control {
+        gap: 5px;
+    }
+
+    .arm-claw-grid .action-button {
+        border-radius: 14px;
+        padding: 5px;
     }
 }
 
-/* -------------------------
-   PREVENT HORIZONTAL OVERFLOW
-   ------------------------- */
-#controlPage,
-.controls-area,
-.control-panel,
-.movement-content,
-.movement-pad,
-.arm-controls,
-.claw-controls {
-    max-width: 100%;
-    min-width: 0;
+
+/* =========================================================
+   VERY SHORT PHONE
+   ========================================================= */
+
+@media (orientation: landscape) and (max-height: 620px) {
+
+    #app {
+        gap: 4px;
+    }
+
+    .controller-topbar {
+        height: 34px;
+        min-height: 34px;
+        border-radius: 12px;
+    }
+
+    .sensor-card {
+        min-height: 40px !important;
+        height: 40px !important;
+    }
+
+    .movement-pad {
+        width:
+            min(
+                50vh,
+                250px
+            );
+
+        gap: 4px;
+    }
+
+    .movement-pad .control-button > span {
+        font-size: 21px !important;
+    }
+
+    .movement-pad .control-button small {
+        display: none;
+    }
+
+    .speed-control {
+        margin-top: 1px !important;
+    }
+
+    .speed-labels {
+        display: none;
+    }
+
+    .arm-claw-grid {
+        gap: 5px;
+    }
+
+    .arm-claw-grid .action-button > span {
+        font-size: 20px !important;
+    }
+
+    .arm-claw-grid .action-button strong {
+        font-size: 6px !important;
+    }
 }
 
-/* The slider changes this variable; do not replace this
-   with a fixed button size elsewhere in the stylesheet. */
- 
+
+/* =========================================================
+   PORTRAIT FALLBACK
+   The installed PWA requests landscape, but if the browser
+   does not honor it, the entire frame still fits.
+   ========================================================= */
+
+@media (orientation: portrait) and (max-width: 700px) {
+
+    #app {
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        height: 100dvh;
+        min-height: 0;
+
+        padding:
+            max(7px, env(safe-area-inset-top))
+            max(7px, env(safe-area-inset-right))
+            max(7px, env(safe-area-inset-bottom))
+            max(7px, env(safe-area-inset-left));
+    }
+
+    .controls-area {
+        grid-template-columns: 1fr;
+        grid-template-rows:
+            minmax(300px, 1fr)
+            minmax(220px, 0.72fr);
+
+        overflow: visible;
+    }
+
+    .movement-pad {
+        width:
+            min(
+                82vw,
+                330px
+            );
+    }
+
+    .arm-claw-grid {
+        min-height: 190px;
+    }
+}
+
+
+/* =========================================================
+   TOUCH DEVICES
+   Prevent hover animations from fighting finger input.
+   ========================================================= */
+
+@media (hover: none) {
+
+    .movement-pad .control-button:hover,
+    .arm-claw-grid .action-button:hover,
+    .sensor-card:hover {
+        transform: none;
+    }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .movement-pad .control-button,
+    .arm-claw-grid .action-button {
+        transition: none;
+    }
+}
