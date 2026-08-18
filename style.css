@@ -4105,3 +4105,319 @@ body:has(.rik-nav:hover) .rik-nav {
     }
 
 }
+/* =========================================================
+   RIK — LIVELY APP EXPERIENCE
+   ========================================================= */
+
+:root {
+    --rik-motion-fast: 140ms;
+    --rik-motion-normal: 260ms;
+    --rik-motion-slow: 700ms;
+}
+
+
+/* =========================================================
+   SMOOTH UI
+   ========================================================= */
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+
+button,
+.control-button,
+.action-button,
+.card,
+.sensor-card {
+    transition:
+        transform var(--rik-motion-normal) ease,
+        box-shadow var(--rik-motion-normal) ease,
+        opacity var(--rik-motion-normal) ease,
+        background-color var(--rik-motion-normal) ease;
+}
+
+
+/* =========================================================
+   CONTROL BUTTON PRESS
+   ========================================================= */
+
+.control-button:active,
+.action-button:active {
+
+    transform:
+        scale(0.94);
+
+}
+
+
+.control-button.pressed,
+.action-button.pressed {
+
+    transform:
+        scale(0.94);
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.12);
+
+}
+
+
+/* =========================================================
+   CONNECTION DOT
+   ========================================================= */
+
+.connection-dot {
+
+    position: relative;
+
+    transition:
+        background-color 300ms ease;
+
+}
+
+
+.connection-dot::after {
+
+    content: "";
+
+    position: absolute;
+
+    inset: -6px;
+
+    border-radius: 50%;
+
+    background: currentColor;
+
+    opacity: 0;
+
+    animation:
+        rikConnectionPulse 2s
+        ease-out infinite;
+
+}
+
+
+@keyframes rikConnectionPulse {
+
+    0% {
+        transform: scale(0.7);
+        opacity: 0.35;
+    }
+
+    70% {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+
+}
+
+
+/* =========================================================
+   SENSOR VALUE UPDATE
+   ========================================================= */
+
+.sensor-value {
+
+    transition:
+        transform 220ms ease,
+        opacity 220ms ease;
+
+}
+
+
+/* =========================================================
+   ACTIVE MOVEMENT
+   ========================================================= */
+
+.drive-state.active {
+
+    animation:
+        rikDrivePulse 900ms
+        ease-in-out infinite;
+
+}
+
+
+@keyframes rikDrivePulse {
+
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.035);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+
+}
+
+
+/* =========================================================
+   READY STATE
+   ========================================================= */
+
+.ready {
+
+    transition:
+        opacity 300ms ease;
+
+}
+
+
+/* =========================================================
+   SENSOR CARD HOVER
+   ========================================================= */
+
+.sensor-card:hover {
+
+    transform:
+        translateY(-2px);
+
+}
+
+
+/* =========================================================
+   ACTION CARD HOVER
+   ========================================================= */
+
+.action-button:hover {
+
+    transform:
+        translateY(-2px);
+
+}
+
+
+/* =========================================================
+   AMBIENT APP MOTION
+   ========================================================= */
+
+body {
+
+    overflow-x: hidden;
+
+}
+
+
+body::before {
+
+    content: "";
+
+    position: fixed;
+
+    width: 420px;
+
+    height: 420px;
+
+    border-radius: 50%;
+
+    left: -180px;
+
+    top: 20%;
+
+    pointer-events: none;
+
+    opacity: 0.12;
+
+    filter: blur(80px);
+
+    animation:
+        rikAmbientOne 12s
+        ease-in-out infinite alternate;
+
+}
+
+
+body::after {
+
+    content: "";
+
+    position: fixed;
+
+    width: 360px;
+
+    height: 360px;
+
+    border-radius: 50%;
+
+    right: -160px;
+
+    bottom: 10%;
+
+    pointer-events: none;
+
+    opacity: 0.10;
+
+    filter: blur(80px);
+
+    animation:
+        rikAmbientTwo 15s
+        ease-in-out infinite alternate;
+
+}
+
+
+@keyframes rikAmbientOne {
+
+    from {
+        transform:
+            translate3d(0, 0, 0)
+            scale(1);
+    }
+
+    to {
+        transform:
+            translate3d(80px, -40px, 0)
+            scale(1.2);
+    }
+
+}
+
+
+@keyframes rikAmbientTwo {
+
+    from {
+        transform:
+            translate3d(0, 0, 0)
+            scale(1);
+    }
+
+    to {
+        transform:
+            translate3d(-70px, 40px, 0)
+            scale(1.25);
+    }
+
+}
+
+
+/* =========================================================
+   RESPECT DEVICE REDUCED MOTION
+   ========================================================= */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    *,
+    *::before,
+    *::after {
+
+        animation-duration: 0.01ms !important;
+
+        animation-iteration-count: 1 !important;
+
+        transition-duration: 0.01ms !important;
+
+    }
+
+}

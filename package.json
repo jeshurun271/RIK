@@ -6,7 +6,6 @@
   "main": "main.js",
   "author": "RIK",
   "license": "MIT",
-
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",
@@ -18,11 +17,10 @@
     "@electron/fuses": "^1.8.0",
     "electron": "43.4.0"
   },
-
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "ws": "^8.21.3"
   },
-
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",

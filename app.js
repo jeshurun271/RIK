@@ -11,6 +11,228 @@ let activeCommand = null;
 
 
 // ==========================================
+// ESP32 / SIMULATOR CONNECTION
+// ==========================================
+
+let esp32Socket = null;
+let esp32Connected = false;
+let esp32ReconnectTimer = null;
+
+
+function connectESP32() {
+
+    if (
+        esp32Socket &&
+        (
+            esp32Socket.readyState === WebSocket.OPEN ||
+            esp32Socket.readyState === WebSocket.CONNECTING
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    console.log(
+        "RIK: Connecting to ESP32 simulator..."
+    );
+
+
+    try {
+
+        esp32Socket =
+            new WebSocket(
+                "ws://localhost:81"
+            );
+
+    } catch (error) {
+
+        console.error(
+            "RIK: Could not create WebSocket:",
+            error
+        );
+
+        scheduleESP32Reconnect();
+
+        return;
+
+    }
+
+
+    esp32Socket.addEventListener(
+        "open",
+        () => {
+
+            esp32Connected = true;
+
+            console.log(
+                "RIK: ESP32 simulator connected"
+            );
+
+        }
+    );
+
+
+    esp32Socket.addEventListener(
+        "message",
+        event => {
+
+            console.log(
+                "RIK ← ESP32:",
+                event.data
+            );
+
+
+            try {
+
+                const data =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                handleESP32Data(
+                    data
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Invalid ESP32 data:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+
+    esp32Socket.addEventListener(
+        "close",
+        () => {
+
+            esp32Connected = false;
+
+            console.log(
+                "RIK: ESP32 simulator disconnected"
+            );
+
+            scheduleESP32Reconnect();
+
+        }
+    );
+
+
+    esp32Socket.addEventListener(
+        "error",
+        error => {
+
+            esp32Connected = false;
+
+            console.error(
+                "RIK: ESP32 connection error:",
+                error
+            );
+
+        }
+    );
+
+}
+
+
+function scheduleESP32Reconnect() {
+
+    if (
+        esp32ReconnectTimer !== null
+    ) {
+
+        return;
+
+    }
+
+
+    esp32ReconnectTimer =
+        setTimeout(
+            () => {
+
+                esp32ReconnectTimer =
+                    null;
+
+                connectESP32();
+
+            },
+            2000
+        );
+
+}
+
+
+function handleESP32Data(
+    data
+) {
+
+    console.log(
+        "RIK ESP32 DATA:",
+        data
+    );
+
+
+    const soilValue =
+        document.getElementById(
+            "soilValue"
+        );
+
+
+    if (
+        soilValue &&
+        typeof data.soil === "number"
+    ) {
+
+        soilValue.textContent =
+            `${data.soil}%`;
+
+    }
+
+
+    const airValue =
+        document.getElementById(
+            "airValue"
+        );
+
+
+    if (
+        airValue &&
+        typeof data.mq135 === "number"
+    ) {
+
+        airValue.textContent =
+            data.mq135;
+
+    }
+
+
+    const signalValue =
+        document.getElementById(
+            "signalValue"
+        );
+
+
+    if (
+        signalValue &&
+        typeof data.rssi === "number"
+    ) {
+
+        signalValue.textContent =
+            `${data.rssi} dBm`;
+
+    }
+
+}
+
+
+// ==========================================
 // RIK HAPTICS
 // ==========================================
 
@@ -19,37 +241,67 @@ let hapticInterval = null;
 
 function startHaptics() {
 
-    if (!("vibrate" in navigator)) {
+    if (
+        !("vibrate" in navigator)
+    ) {
+
         return;
+
     }
 
-    if (hapticInterval !== null) {
+
+    if (
+        hapticInterval !== null
+    ) {
+
         return;
+
     }
 
-    navigator.vibrate(100);
 
-    hapticInterval = setInterval(() => {
+    navigator.vibrate(
+        100
+    );
 
-        navigator.vibrate(100);
 
-    }, 100);
+    hapticInterval =
+        setInterval(
+            () => {
+
+                navigator.vibrate(
+                    100
+                );
+
+            },
+            100
+        );
 
 }
 
+
 function stopHaptics() {
 
-    if (hapticInterval !== null) {
+    if (
+        hapticInterval !== null
+    ) {
 
-        clearInterval(hapticInterval);
+        clearInterval(
+            hapticInterval
+        );
 
-        hapticInterval = null;
+        hapticInterval =
+            null;
 
     }
 
-    if ("vibrate" in navigator) {
 
-        navigator.vibrate(0);
+    if (
+        "vibrate" in navigator
+    ) {
+
+        navigator.vibrate(
+            0
+        );
 
     }
 
@@ -60,24 +312,74 @@ function stopHaptics() {
 // SEND ROBOT COMMAND
 // ==========================================
 
-function sendCommand(command) {
+function sendCommand(
+    command
+) {
 
-    console.log("RIK COMMAND:", command);
+    console.log(
+        "RIK COMMAND:",
+        command
+    );
+
 
     const robotStatus =
-        document.getElementById("robotStatus");
+        document.getElementById(
+            "robotStatus"
+        );
 
-    if (robotStatus) {
 
-        robotStatus.textContent = command;
+    if (
+        robotStatus
+    ) {
 
-        robotStatus.classList.remove("ready");
+        robotStatus.textContent =
+            command;
+
+
+        robotStatus.classList.remove(
+            "ready"
+        );
 
     }
 
-    updateDriveState(command);
 
-    updateArmState(command);
+    updateDriveState(
+        command
+    );
+
+
+    updateArmState(
+        command
+    );
+
+
+    // ==========================================
+    // SEND COMMAND TO ESP32 / SIMULATOR
+    // ==========================================
+
+    if (
+        esp32Socket &&
+        esp32Socket.readyState ===
+            WebSocket.OPEN
+    ) {
+
+        esp32Socket.send(
+            command
+        );
+
+
+        console.log(
+            "RIK → ESP32:",
+            command
+        );
+
+    } else {
+
+        console.warn(
+            "RIK: ESP32 is not connected"
+        );
+
+    }
 
 }
 
@@ -88,28 +390,73 @@ function sendCommand(command) {
 
 function stopRobot() {
 
-    if (activeCommand !== null) {
+    if (
+        activeCommand !== null
+    ) {
 
-        console.log("RIK COMMAND: STOP");
+        console.log(
+            "RIK COMMAND: STOP"
+        );
 
-        activeCommand = null;
+
+        activeCommand =
+            null;
 
     }
+
 
     const robotStatus =
-        document.getElementById("robotStatus");
+        document.getElementById(
+            "robotStatus"
+        );
 
-    if (robotStatus) {
 
-        robotStatus.textContent = "READY";
+    if (
+        robotStatus
+    ) {
 
-        robotStatus.classList.add("ready");
+        robotStatus.textContent =
+            "READY";
+
+
+        robotStatus.classList.add(
+            "ready"
+        );
 
     }
 
-    updateDriveState("STOP");
 
-    updateArmState("STOP");
+    updateDriveState(
+        "STOP"
+    );
+
+
+    updateArmState(
+        "STOP"
+    );
+
+
+    // ==========================================
+    // SEND STOP TO ESP32 / SIMULATOR
+    // ==========================================
+
+    if (
+        esp32Socket &&
+        esp32Socket.readyState ===
+            WebSocket.OPEN
+    ) {
+
+        esp32Socket.send(
+            "STOP"
+        );
+
+
+        console.log(
+            "RIK → ESP32: STOP"
+        );
+
+    }
+
 
     stopHaptics();
 
@@ -549,13 +896,11 @@ function formatTime(totalSeconds) {
         totalSeconds % 60;
 
     return (
-
         String(minutes).padStart(2, "0")
         +
         ":"
         +
         String(seconds).padStart(2, "0")
-
     );
 
 }
@@ -1393,7 +1738,10 @@ if (rikNavigation) {
         "nav-visible"
     );
 
-}/* =========================================================
+}
+
+
+/* =========================================================
    RIK PWA SERVICE WORKER
    ========================================================= */
 
@@ -1431,7 +1779,10 @@ if (
         }
     );
 
-}/* =========================================================
+}
+
+
+/* =========================================================
    RIK PWA INSTALL
    ========================================================= */
 
@@ -1550,6 +1901,7 @@ if (installButton) {
                     "RIK is already installed on this device."
                 );
 
+
                 return;
 
             }
@@ -1575,6 +1927,7 @@ if (installButton) {
                     "3. Select 'Add to Home Screen'.\n" +
                     "4. Tap 'Add'."
                 );
+
 
                 return;
 
@@ -1617,4 +1970,96 @@ window.addEventListener(
         deferredInstallPrompt = null;
 
     }
-);  
+);
+
+
+// ==========================================
+// START ESP32 CONNECTION
+// ==========================================
+
+connectESP32();// ==========================================
+// RIK FORCE FULLSCREEN
+// ==========================================
+
+async function enterRIKFullscreen() {
+
+    try {
+
+        // Already fullscreen
+        if (document.fullscreenElement) {
+            return;
+        }
+
+        // Browser supports Fullscreen API
+        if (document.documentElement.requestFullscreen) {
+
+            await document.documentElement.requestFullscreen({
+                navigationUI: "hide"
+            });
+
+            console.log(
+                "RIK: Fullscreen enabled"
+            );
+
+        }
+
+    } catch (error) {
+
+        console.log(
+            "RIK: Fullscreen request was blocked:",
+            error
+        );
+
+    }
+
+}
+
+
+// ==========================================
+// ENTER FULLSCREEN ON FIRST USER INTERACTION
+// ==========================================
+
+let rikFullscreenRequested = false;
+
+function requestRIKFullscreen() {
+
+    if (rikFullscreenRequested) {
+        return;
+    }
+
+    rikFullscreenRequested = true;
+
+    enterRIKFullscreen();
+
+}
+
+
+// Touch devices
+document.addEventListener(
+    "touchstart",
+    requestRIKFullscreen,
+    {
+        once: true,
+        passive: true
+    }
+);
+
+
+// Mouse / desktop
+document.addEventListener(
+    "mousedown",
+    requestRIKFullscreen,
+    {
+        once: true
+    }
+);
+
+
+// Keyboard
+document.addEventListener(
+    "keydown",
+    requestRIKFullscreen,
+    {
+        once: true
+    }
+);
