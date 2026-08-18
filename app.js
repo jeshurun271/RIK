@@ -2062,4 +2062,581 @@ document.addEventListener(
     {
         once: true
     }
-);
+);/* =========================================================
+   RIK AUTO-FRAME ENGINE
+   Dynamically sizes and centers the robot controls.
+   ========================================================= */
+
+(() => {
+    "use strict";
+
+    let frameAnimation = null;
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function px(value) {
+        return `${Math.round(value * 10) / 10}px`;
+    }
+
+    function getNumberVariable(name, fallback = 1) {
+        const value = parseFloat(
+            getComputedStyle(document.documentElement)
+                .getPropertyValue(name)
+        );
+
+        return Number.isFinite(value) ? value : fallback;
+    }
+
+    function autoFitRIKControls() {
+        if (frameAnimation) {
+            cancelAnimationFrame(frameAnimation);
+        }
+
+        frameAnimation = requestAnimationFrame(() => {
+            frameAnimation = null;
+
+            const root = document.documentElement;
+
+            const app = document.querySelector("#app");
+            const movementPanel =
+                document.querySelector(".movement-panel");
+
+            const movementContent =
+                document.querySelector(".movement-content");
+
+            const movementPad =
+                document.querySelector(".movement-pad");
+
+            const speedControl =
+                document.querySelector(".speed-control");
+
+            const armPanel =
+                document.querySelector(".arm-claw-panel");
+
+            const armGrid =
+                document.querySelector(".arm-claw-grid");
+
+            if (
+                !app ||
+                !movementPanel ||
+                !movementContent ||
+                !movementPad
+            ) {
+                return;
+            }
+
+            /* ---------------------------------------------
+               1. VIEWPORT
+               --------------------------------------------- */
+
+            const viewport =
+                window.visualViewport;
+
+            const viewportWidth =
+                viewport?.width || window.innerWidth;
+
+            const viewportHeight =
+                viewport?.height || window.innerHeight;
+
+            root.style.setProperty(
+                "--rik-viewport-width",
+                px(viewportWidth)
+            );
+
+            root.style.setProperty(
+                "--rik-viewport-height",
+                px(viewportHeight)
+            );
+
+
+            /* ---------------------------------------------
+               2. MOVEMENT PANEL
+               --------------------------------------------- */
+
+            const panelRect =
+                movementPanel.getBoundingClientRect();
+
+            const contentRect =
+                movementContent.getBoundingClientRect();
+
+            if (
+                panelRect.width <= 0 ||
+                panelRect.height <= 0
+            ) {
+                return;
+            }
+
+
+            /* ---------------------------------------------
+               3. AVAILABLE MOVEMENT SPACE
+               --------------------------------------------- */
+
+            const horizontalPadding =
+                Math.max(8, contentRect.width * 0.025);
+
+            const verticalPadding =
+                Math.max(5, contentRect.height * 0.025);
+
+            let availableWidth =
+                contentRect.width -
+                horizontalPadding * 2;
+
+            let availableHeight =
+                contentRect.height -
+                verticalPadding * 2;
+
+
+            /* Leave room for speed slider. */
+
+            if (speedControl) {
+                const speedRect =
+                    speedControl.getBoundingClientRect();
+
+                const speedHeight =
+                    speedRect.height;
+
+                availableHeight -=
+                    speedHeight + 8;
+            }
+
+
+            /* ---------------------------------------------
+               4. CALCULATE THE LARGEST SAFE SQUARE
+               --------------------------------------------- */
+
+            let movementSize =
+                Math.min(
+                    availableWidth,
+                    availableHeight
+                );
+
+
+            /*
+             * Never allow the pad to consume absolutely
+             * everything. Keep a little breathing room.
+             */
+
+            movementSize *= 0.96;
+
+
+            /*
+             * Hard limits prevent absurd sizing on
+             * tablets/desktops.
+             */
+
+            const maxMovementSize =
+                viewportWidth < 600
+                    ? viewportWidth * 0.78
+                    : 460;
+
+            movementSize =
+                Math.min(
+                    movementSize,
+                    maxMovementSize
+                );
+
+
+            /*
+             * Minimum prevents controls becoming tiny
+             * during browser resize.
+             */
+
+            movementSize =
+                Math.max(
+                    movementSize,
+                    170
+                );
+
+
+            /* ---------------------------------------------
+               5. MOVEMENT PAD
+               --------------------------------------------- */
+
+            root.style.setProperty(
+                "--rik-movement-size",
+                px(movementSize)
+            );
+
+            movementPad.style.width =
+                px(movementSize);
+
+            movementPad.style.height =
+                px(movementSize);
+
+            movementPad.style.aspectRatio =
+                "1 / 1";
+
+            movementPad.style.margin =
+                "auto";
+
+            movementPad.style.alignSelf =
+                "center";
+
+
+            /* ---------------------------------------------
+               6. MOVEMENT BUTTON SCALE
+               --------------------------------------------- */
+
+            const slider =
+                document.querySelector(
+                    "#buttonSizeSlider"
+                );
+
+            let sliderValue = 100;
+
+            if (slider) {
+                sliderValue =
+                    parseFloat(slider.value) || 100;
+            }
+
+            const requestedScale =
+                sliderValue / 100;
+
+
+            /*
+             * Calculate the actual grid cell.
+             *
+             * 3 columns + 2 gaps
+             */
+
+            const padStyles =
+                getComputedStyle(movementPad);
+
+            const gap =
+                parseFloat(padStyles.columnGap) || 8;
+
+            const cellSize =
+                (
+                    movementSize -
+                    gap * 2
+                ) / 3;
+
+
+            /*
+             * The slider can request 130%, but we NEVER
+             * allow a button to escape its grid cell.
+             */
+
+            const maximumSafeScale =
+                1;
+
+            const actualScale =
+                Math.min(
+                    requestedScale,
+                    maximumSafeScale
+                );
+
+            const buttonSize =
+                cellSize * actualScale;
+
+
+            root.style.setProperty(
+                "--rik-cell-size",
+                px(cellSize)
+            );
+
+            root.style.setProperty(
+                "--rik-button-size",
+                px(buttonSize)
+            );
+
+            root.style.setProperty(
+                "--rik-button-scale",
+                actualScale
+            );
+
+
+            /* ---------------------------------------------
+               7. FORCE MOVEMENT BUTTON FIT
+               --------------------------------------------- */
+
+            const movementButtons =
+                movementPad.querySelectorAll(
+                    ".control-button"
+                );
+
+            movementButtons.forEach(button => {
+
+                button.style.width =
+                    px(buttonSize);
+
+                button.style.height =
+                    px(buttonSize);
+
+                button.style.maxWidth =
+                    px(cellSize);
+
+                button.style.maxHeight =
+                    px(cellSize);
+
+                button.style.minWidth =
+                    "0";
+
+                button.style.minHeight =
+                    "0";
+
+                button.style.boxSizing =
+                    "border-box";
+
+                button.style.justifySelf =
+                    "center";
+
+                button.style.alignSelf =
+                    "center";
+            });
+
+
+            /* ---------------------------------------------
+               8. ARM + CLAW AUTO FIT
+               --------------------------------------------- */
+
+            if (armPanel && armGrid) {
+
+                const armRect =
+                    armPanel.getBoundingClientRect();
+
+                const gridRect =
+                    armGrid.getBoundingClientRect();
+
+                if (
+                    gridRect.width > 0 &&
+                    gridRect.height > 0
+                ) {
+
+                    const armGap =
+                        parseFloat(
+                            getComputedStyle(armGrid)
+                                .gap
+                        ) || 8;
+
+                    const armColumnWidth =
+                        (
+                            gridRect.width -
+                            armGap
+                        ) / 2;
+
+                    const armRowHeight =
+                        (
+                            gridRect.height -
+                            armGap
+                        ) / 2;
+
+                    /*
+                     * Keep arm/claw controls within their
+                     * available cells.
+                     */
+
+                    const actionSize =
+                        Math.min(
+                            armColumnWidth,
+                            armRowHeight
+                        );
+
+                    root.style.setProperty(
+                        "--rik-action-size",
+                        px(actionSize)
+                    );
+
+                    armGrid
+                        .querySelectorAll(
+                            ".action-button"
+                        )
+                        .forEach(button => {
+
+                            button.style.minWidth =
+                                "0";
+
+                            button.style.minHeight =
+                                "0";
+
+                            button.style.maxWidth =
+                                "100%";
+
+                            button.style.maxHeight =
+                                "100%";
+
+                            button.style.boxSizing =
+                                "border-box";
+                        });
+                }
+            }
+
+
+            /* ---------------------------------------------
+               9. CENTER EVERYTHING
+               --------------------------------------------- */
+
+            movementContent.style.alignItems =
+                "center";
+
+            movementContent.style.justifyContent =
+                "center";
+
+
+            /* ---------------------------------------------
+               10. DEVICE CLASS
+               --------------------------------------------- */
+
+            const isLandscape =
+                viewportWidth >
+                viewportHeight;
+
+            const isPhone =
+                Math.min(
+                    viewportWidth,
+                    viewportHeight
+                ) < 600;
+
+            root.classList.toggle(
+                "rik-landscape",
+                isLandscape
+            );
+
+            root.classList.toggle(
+                "rik-portrait",
+                !isLandscape
+            );
+
+            root.classList.toggle(
+                "rik-phone",
+                isPhone
+            );
+
+            root.classList.toggle(
+                "rik-tablet",
+                !isPhone &&
+                Math.min(
+                    viewportWidth,
+                    viewportHeight
+                ) < 1000
+            );
+        });
+    }
+
+
+    /* =====================================================
+       OBSERVE THE ACTUAL ELEMENTS
+       This is the important part.
+       ===================================================== */
+
+    const resizeObserver =
+        new ResizeObserver(() => {
+            autoFitRIKControls();
+        });
+
+
+    function startAutoFitObserver() {
+
+        const elements = [
+            "#app",
+            ".controls-area",
+            ".movement-panel",
+            ".movement-content",
+            ".movement-pad",
+            ".arm-claw-panel",
+            ".arm-claw-grid"
+        ];
+
+        elements.forEach(selector => {
+
+            const element =
+                document.querySelector(selector);
+
+            if (element) {
+                resizeObserver.observe(element);
+            }
+        });
+
+        autoFitRIKControls();
+    }
+
+
+    /* =====================================================
+       SCREEN / BROWSER EVENTS
+       ===================================================== */
+
+    window.addEventListener(
+        "resize",
+        autoFitRIKControls,
+        { passive: true }
+    );
+
+    window.addEventListener(
+        "orientationchange",
+        () => {
+            setTimeout(
+                autoFitRIKControls,
+                100
+            );
+
+            setTimeout(
+                autoFitRIKControls,
+                500
+            );
+        },
+        { passive: true }
+    );
+
+
+    if (window.visualViewport) {
+
+        window.visualViewport.addEventListener(
+            "resize",
+            autoFitRIKControls,
+            { passive: true }
+        );
+
+        window.visualViewport.addEventListener(
+            "scroll",
+            autoFitRIKControls,
+            { passive: true }
+        );
+    }
+
+
+    /* =====================================================
+       START AFTER DOM IS READY
+       ===================================================== */
+
+    if (document.readyState === "loading") {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            () => {
+                startAutoFitObserver();
+
+                setTimeout(
+                    autoFitRIKControls,
+                    250
+                );
+
+                setTimeout(
+                    autoFitRIKControls,
+                    1000
+                );
+            },
+            { once: true }
+        );
+
+    } else {
+
+        startAutoFitObserver();
+
+        setTimeout(
+            autoFitRIKControls,
+            250
+        );
+    }
+
+
+    /*
+     * Expose it so the existing slider can force an
+     * immediate recalculation if necessary.
+     */
+
+    window.autoFitRIKControls =
+        autoFitRIKControls;
+
+})();

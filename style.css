@@ -4354,3 +4354,165 @@ body {
         transition: none;
     }
 }
+/* =========================================================
+   RIK AUTO-FIT ENGINE — FINAL OVERRIDES
+   ========================================================= */
+
+html,
+body,
+#app {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#app {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.controls-area {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.control-panel,
+.movement-panel,
+.movement-content,
+.arm-claw-panel,
+.arm-claw-grid {
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.movement-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.movement-pad {
+    width: var(--rik-movement-size, 280px) !important;
+    height: var(--rik-movement-size, 280px) !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    max-width: 100% !important;
+    max-height: 100% !important;
+
+    aspect-ratio: 1 / 1 !important;
+
+    margin: auto !important;
+
+    box-sizing: border-box;
+
+    display: grid !important;
+
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr)) !important;
+
+    grid-template-rows:
+        repeat(3, minmax(0, 1fr)) !important;
+}
+
+.movement-pad .control-button {
+    width: var(--rik-button-size, 80px) !important;
+    height: var(--rik-button-size, 80px) !important;
+
+    max-width: 100% !important;
+    max-height: 100% !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    margin: auto !important;
+
+    box-sizing: border-box !important;
+}
+
+.arm-claw-grid {
+    overflow: hidden !important;
+}
+
+.arm-claw-grid .action-button {
+    width: 100% !important;
+    height: 100% !important;
+
+    min-width: 0 !important;
+    min-height: 0 !important;
+
+    max-width: 100% !important;
+    max-height: 100% !important;
+
+    box-sizing: border-box !important;
+}
+
+
+/* =========================================================
+   SMALL LANDSCAPE DEVICES
+   ========================================================= */
+
+.rik-phone.rik-landscape .movement-pad {
+    width: min(
+        var(--rik-movement-size),
+        58vh,
+        310px
+    ) !important;
+
+    height: min(
+        var(--rik-movement-size),
+        58vh,
+        310px
+    ) !important;
+}
+
+
+/* =========================================================
+   PORTRAIT FALLBACK
+   ========================================================= */
+
+.rik-phone.rik-portrait .controls-area {
+    overflow-y: auto;
+}
+
+.rik-phone.rik-portrait .movement-pad {
+    width: min(
+        var(--rik-movement-size),
+        78vw
+    ) !important;
+
+    height: min(
+        var(--rik-movement-size),
+        78vw
+    ) !important;
+}
+
+
+/* =========================================================
+   TOUCH FEEL
+   ========================================================= */
+
+.movement-pad .control-button,
+.arm-claw-grid .action-button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+
+    transition:
+        transform 100ms ease,
+        box-shadow 120ms ease,
+        background-color 120ms ease;
+}
+
+.movement-pad .control-button:active,
+.arm-claw-grid .action-button:active {
+    transform: scale(.94) !important;
+}
