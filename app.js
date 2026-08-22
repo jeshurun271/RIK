@@ -1,2642 +1,2848 @@
-// ==========================================
-// RIK — ROBOT IN KONTROL
-// ==========================================
-
-
-// ==========================================
-// ROBOT COMMAND SYSTEM
-// ==========================================
-
-let activeCommand = null;
-
-
-// ==========================================
-// ESP32 / SIMULATOR CONNECTION
-// ==========================================
-
-let esp32Socket = null;
-let esp32Connected = false;
-let esp32ReconnectTimer = null;
-
-
-function connectESP32() {
-
-    if (
-        esp32Socket &&
-        (
-            esp32Socket.readyState === WebSocket.OPEN ||
-            esp32Socket.readyState === WebSocket.CONNECTING
-        )
-    ) {
-
-        return;
-
-    }
-
-
-    console.log(
-        "RIK: Connecting to ESP32 simulator..."
-    );
-
-
-    try {
-
-        esp32Socket =
-            new WebSocket(
-                "ws://localhost:81"
-            );
-
-    } catch (error) {
-
-        console.error(
-            "RIK: Could not create WebSocket:",
-            error
-        );
-
-        scheduleESP32Reconnect();
-
-        return;
-
-    }
-
-
-    esp32Socket.addEventListener(
-        "open",
-        () => {
-
-            esp32Connected = true;
-
-            console.log(
-                "RIK: ESP32 simulator connected"
-            );
-
-        }
-    );
-
-
-    esp32Socket.addEventListener(
-        "message",
-        event => {
-
-            console.log(
-                "RIK ← ESP32:",
-                event.data
-            );
-
-
-            try {
-
-                const data =
-                    JSON.parse(
-                        event.data
-                    );
-
-
-                handleESP32Data(
-                    data
-                );
-
-            } catch (error) {
-
-                console.error(
-                    "Invalid ESP32 data:",
-                    error
-                );
-
-            }
-
-        }
-    );
-
-
-    esp32Socket.addEventListener(
-        "close",
-        () => {
-
-            esp32Connected = false;
-
-            console.log(
-                "RIK: ESP32 simulator disconnected"
-            );
-
-            scheduleESP32Reconnect();
-
-        }
-    );
-
-
-    esp32Socket.addEventListener(
-        "error",
-        error => {
-
-            esp32Connected = false;
-
-            console.error(
-                "RIK: ESP32 connection error:",
-                error
-            );
-
-        }
-    );
-
-}
-
-
-function scheduleESP32Reconnect() {
-
-    if (
-        esp32ReconnectTimer !== null
-    ) {
-
-        return;
-
-    }
-
-
-    esp32ReconnectTimer =
-        setTimeout(
-            () => {
-
-                esp32ReconnectTimer =
-                    null;
-
-                connectESP32();
-
-            },
-            2000
-        );
-
-}
-
-
-function handleESP32Data(
-    data
-) {
-
-    console.log(
-        "RIK ESP32 DATA:",
-        data
-    );
-
-
-    const soilValue =
-        document.getElementById(
-            "soilValue"
-        );
-
-
-    if (
-        soilValue &&
-        typeof data.soil === "number"
-    ) {
-
-        soilValue.textContent =
-            `${data.soil}%`;
-
-    }
-
-
-    const airValue =
-        document.getElementById(
-            "airValue"
-        );
-
-
-    if (
-        airValue &&
-        typeof data.mq135 === "number"
-    ) {
-
-        airValue.textContent =
-            data.mq135;
-
-    }
-
-
-    const signalValue =
-        document.getElementById(
-            "signalValue"
-        );
-
-
-    if (
-        signalValue &&
-        typeof data.rssi === "number"
-    ) {
-
-        signalValue.textContent =
-            `${data.rssi} dBm`;
-
-    }
-
-}
-
-
-// ==========================================
-// RIK HAPTICS
-// ==========================================
-
-let hapticInterval = null;
-
-
-function startHaptics() {
-
-    if (
-        !("vibrate" in navigator)
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        hapticInterval !== null
-    ) {
-
-        return;
-
-    }
-
-
-    navigator.vibrate(
-        100
-    );
-
-
-    hapticInterval =
-        setInterval(
-            () => {
-
-                navigator.vibrate(
-                    100
-                );
-
-            },
-            100
-        );
-
-}
-
-
-function stopHaptics() {
-
-    if (
-        hapticInterval !== null
-    ) {
-
-        clearInterval(
-            hapticInterval
-        );
-
-        hapticInterval =
-            null;
-
-    }
-
-
-    if (
-        "vibrate" in navigator
-    ) {
-
-        navigator.vibrate(
-            0
-        );
-
-    }
-
-}
-
-
-// ==========================================
-// SEND ROBOT COMMAND
-// ==========================================
-
-function sendCommand(
-    command
-) {
-
-    console.log(
-        "RIK COMMAND:",
-        command
-    );
-
-
-    const robotStatus =
-        document.getElementById(
-            "robotStatus"
-        );
-
-
-    if (
-        robotStatus
-    ) {
-
-        robotStatus.textContent =
-            command;
-
-
-        robotStatus.classList.remove(
-            "ready"
-        );
-
-    }
-
-
-    updateDriveState(
-        command
-    );
-
-
-    updateArmState(
-        command
-    );
-
-
-    // ==========================================
-    // SEND COMMAND TO ESP32 / SIMULATOR
-    // ==========================================
-
-    if (
-        esp32Socket &&
-        esp32Socket.readyState ===
-            WebSocket.OPEN
-    ) {
-
-        esp32Socket.send(
-            command
-        );
-
-
-        console.log(
-            "RIK → ESP32:",
-            command
-        );
-
-    } else {
-
-        console.warn(
-            "RIK: ESP32 is not connected"
-        );
-
-    }
-
-}
-
-
-// ==========================================
-// STOP ROBOT
-// ==========================================
-
-function stopRobot() {
-
-    if (
-        activeCommand !== null
-    ) {
-
-        console.log(
-            "RIK COMMAND: STOP"
-        );
-
-
-        activeCommand =
-            null;
-
-    }
-
-
-    const robotStatus =
-        document.getElementById(
-            "robotStatus"
-        );
-
-
-    if (
-        robotStatus
-    ) {
-
-        robotStatus.textContent =
-            "READY";
-
-
-        robotStatus.classList.add(
-            "ready"
-        );
-
-    }
-
-
-    updateDriveState(
-        "STOP"
-    );
-
-
-    updateArmState(
-        "STOP"
-    );
-
-
-    // ==========================================
-    // SEND STOP TO ESP32 / SIMULATOR
-    // ==========================================
-
-    if (
-        esp32Socket &&
-        esp32Socket.readyState ===
-            WebSocket.OPEN
-    ) {
-
-        esp32Socket.send(
-            "STOP"
-        );
-
-
-        console.log(
-            "RIK → ESP32: STOP"
-        );
-
-    }
-
-
-    stopHaptics();
-
-}
-
-
-// ==========================================
-// DRIVE STATE
-// ==========================================
-
-function updateDriveState(command) {
-
-    const driveDot =
-        document.getElementById("driveDot");
-
-    const driveState =
-        document.getElementById("driveState");
-
-    const movementCommands = [
-        "FORWARD",
-        "BACKWARD",
-        "LEFT",
-        "RIGHT"
-    ];
-
-    const driving =
-        movementCommands.includes(command);
-
-    if (driveState) {
-
-        driveState.textContent =
-            driving ? command : "STOPPED";
-
-    }
-
-    const driveStateBox =
-        document.querySelector(".drive-state");
-
-    if (driveStateBox) {
-
-        driveStateBox.classList.toggle(
-            "active",
-            driving
-        );
-
-    }
-
-    if (driveDot) {
-
-        driveDot.style.background =
-            driving ? "#35c759" : "#aaa";
-
-    }
-
-}
-
-
-// ==========================================
-// ARM STATE
-// ==========================================
-
-function updateArmState(command) {
-
-    const armPosition =
-        document.getElementById("armPosition");
-
-    if (!armPosition) {
-        return;
-    }
-
-    if (command === "ARM_UP") {
-
-        armPosition.textContent = "RAISING";
-
-    }
-
-    else if (command === "ARM_DOWN") {
-
-        armPosition.textContent = "LOWERING";
-
-    }
-
-    else if (command === "STOP") {
-
-        armPosition.textContent = "READY";
-
-    }
-
-}
-
-
-// ==========================================
-// PRESS CONTROL BUTTON
-// ==========================================
-
-function pressButton(button) {
-
-    const command =
-        button.dataset.command;
-
-    if (!command) {
-        return;
-    }
-
-    activeCommand = command;
-
-    button.classList.add("pressed");
-
-    sendCommand(command);
-
-    startHaptics();
-
-}
-
-
-// ==========================================
-// RELEASE CONTROL BUTTON
-// ==========================================
-
-function releaseButton(button) {
-
-    button.classList.remove("pressed");
-
-    stopRobot();
-
-}
-
-
-// ==========================================
-// CONTROL BUTTONS
-// ==========================================
-
-const buttons =
-    document.querySelectorAll(
-        ".control-button, .action-button"
-    );
-
-
-buttons.forEach(button => {
-
-    // Mouse down
-    button.addEventListener(
-        "mousedown",
-        event => {
-
-            event.preventDefault();
-
-            pressButton(button);
-
-        }
-    );
-
-
-    // Mouse up
-    button.addEventListener(
-        "mouseup",
-        event => {
-
-            event.preventDefault();
-
-            releaseButton(button);
-
-        }
-    );
-
-
-    // Mouse leave
-    button.addEventListener(
-        "mouseleave",
-        () => {
-
-            if (activeCommand !== null) {
-
-                releaseButton(button);
-
-            }
-
-        }
-    );
-
-
-    // Touch start
-    button.addEventListener(
-        "touchstart",
-        event => {
-
-            event.preventDefault();
-
-            pressButton(button);
-
-        },
-        {
-            passive: false
-        }
-    );
-
-
-    // Touch end
-    button.addEventListener(
-        "touchend",
-        event => {
-
-            event.preventDefault();
-
-            releaseButton(button);
-
-        },
-        {
-            passive: false
-        }
-    );
-
-
-    // Touch cancel
-    button.addEventListener(
-        "touchcancel",
-        event => {
-
-            event.preventDefault();
-
-            releaseButton(button);
-
-        },
-        {
-            passive: false
-        }
-    );
-
-});
-
-
-// ==========================================
-// SAFETY
-// ==========================================
-
-window.addEventListener(
-    "blur",
-    () => {
-
-        buttons.forEach(button => {
-
-            button.classList.remove("pressed");
-
-        });
-
-        stopRobot();
-
-    }
-);
-
-
-document.addEventListener(
-    "visibilitychange",
-    () => {
-
-        if (document.hidden) {
-
-            buttons.forEach(button => {
-
-                button.classList.remove("pressed");
-
-            });
-
-            stopRobot();
-
-        }
-
-    }
-);
-
-
-// ==========================================
-// SPEED CONTROL
-// ==========================================
-
-const speedSlider =
-    document.getElementById("speedSlider");
-
-
-const speedValue =
-    document.getElementById("speedValue");
-
-
-if (
-    speedSlider &&
-    speedValue
-) {
-
-    speedSlider.addEventListener(
-        "input",
-        () => {
-
-            const speed =
-                Number(speedSlider.value);
-
-            speedValue.textContent =
-                `${speed}%`;
-
-            console.log(
-                "RIK SPEED:",
-                speed
-            );
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// TIMER
-// ==========================================
-
-const timerButton =
-    document.getElementById("timerButton");
-
-
-const timerOverlay =
-    document.getElementById("timerOverlay");
-
-
-const closeTimer =
-    document.getElementById("closeTimer");
-
-
-const startTimer =
-    document.getElementById("startTimer");
-
-
-const resetTimer =
-    document.getElementById("resetTimer");
-
-
-const minutesInput =
-    document.getElementById("timerMinutes");
-
-
-const secondsInput =
-    document.getElementById("timerSeconds");
-
-
-const timerDisplay =
-    document.getElementById("timerDisplay");
-
-
-const timerBigDisplay =
-    document.getElementById("timerBigDisplay");
-
-
-let timerInterval = null;
-
-let remainingSeconds = 0;
-
-
-// ==========================================
-// OPEN TIMER
-// ==========================================
-
-if (
-    timerButton &&
-    timerOverlay
-) {
-
-    timerButton.addEventListener(
-        "click",
-        () => {
-
-            timerOverlay.classList.add("show");
-
-            updateTimerDisplay();
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// CLOSE TIMER
-// ==========================================
-
-if (
-    closeTimer &&
-    timerOverlay
-) {
-
-    closeTimer.addEventListener(
-        "click",
-        () => {
-
-            timerOverlay.classList.remove("show");
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// CLICK OUTSIDE TIMER
-// ==========================================
-
-if (timerOverlay) {
-
-    timerOverlay.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target === timerOverlay
-            ) {
-
-                timerOverlay.classList.remove(
-                    "show"
-                );
-
-            }
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// FORMAT TIMER
-// ==========================================
-
-function formatTime(totalSeconds) {
-
-    const minutes =
-        Math.floor(
-            totalSeconds / 60
-        );
-
-    const seconds =
-        totalSeconds % 60;
-
-    return (
-        String(minutes).padStart(2, "0")
-        +
-        ":"
-        +
-        String(seconds).padStart(2, "0")
-    );
-
-}
-
-
-// ==========================================
-// UPDATE TIMER DISPLAY
-// ==========================================
-
-function updateTimerDisplay() {
-
-    const formattedTime =
-        formatTime(
-            remainingSeconds
-        );
-
-    if (timerDisplay) {
-
-        timerDisplay.textContent =
-            formattedTime;
-
-    }
-
-    if (timerBigDisplay) {
-
-        timerBigDisplay.textContent =
-            formattedTime;
-
-    }
-
-}
-
-
-// ==========================================
-// START TIMER
-// ==========================================
-
-if (startTimer) {
-
-    startTimer.addEventListener(
-        "click",
-        () => {
-
-            if (
-                !minutesInput ||
-                !secondsInput
-            ) {
-
-                return;
-
-            }
-
-            let minutes =
-                Number(
-                    minutesInput.value
-                ) || 0;
-
-            let seconds =
-                Number(
-                    secondsInput.value
-                ) || 0;
-
-
-            minutes =
-                Math.max(
-                    0,
-                    Math.min(
-                        59,
-                        minutes
-                    )
-                );
-
-
-            seconds =
-                Math.max(
-                    0,
-                    Math.min(
-                        59,
-                        seconds
-                    )
-                );
-
-
-            remainingSeconds =
-                (minutes * 60) + seconds;
-
-
-            if (
-                remainingSeconds <= 0
-            ) {
-
-                return;
-
-            }
-
-
-            clearInterval(
-                timerInterval
-            );
-
-
-            timerInterval = null;
-
-
-            updateTimerDisplay();
-
-
-            if (timerOverlay) {
-
-                timerOverlay.classList.remove(
-                    "show"
-                );
-
-            }
-
-
-            timerInterval =
-                setInterval(
-                    () => {
-
-                        remainingSeconds--;
-
-                        updateTimerDisplay();
-
-
-                        if (
-                            remainingSeconds <= 0
-                        ) {
-
-                            clearInterval(
-                                timerInterval
-                            );
-
-                            timerInterval = null;
-
-                            remainingSeconds = 0;
-
-                            updateTimerDisplay();
-
-                            timerFinished();
-
-                        }
-
-                    },
-                    1000
-                );
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// TIMER FINISHED
-// ==========================================
-
-function timerFinished() {
-
-    console.log(
-        "RIK TIMER: COMPLETE"
-    );
-
-
-    const robotStatus =
-        document.getElementById(
-            "robotStatus"
-        );
-
-
-    if (robotStatus) {
-
-        robotStatus.textContent =
-            "TIMER DONE";
-
-    }
-
-
-    if (
-        "vibrate" in navigator
-    ) {
-
-        navigator.vibrate([
-            200,
-            100,
-            200
-        ]);
-
-    }
-
-
-    if (
-        "Notification" in window &&
-        Notification.permission === "granted"
-    ) {
-
-        new Notification(
-            "RIK Timer",
-            {
-                body:
-                    "The operation timer has finished."
-            }
-        );
-
-    }
-
-}
-
-
-// ==========================================
-// RESET TIMER
-// ==========================================
-
-if (resetTimer) {
-
-    resetTimer.addEventListener(
-        "click",
-        () => {
-
-            clearInterval(
-                timerInterval
-            );
-
-            timerInterval = null;
-
-            remainingSeconds = 0;
-
-            updateTimerDisplay();
-
-
-            if (minutesInput) {
-
-                minutesInput.value = 0;
-
-            }
-
-
-            if (secondsInput) {
-
-                secondsInput.value = 30;
-
-            }
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// AUTO-HIDE NAVIGATION
-// ==========================================
-
-const rikNavigation =
-    document.getElementById(
-        "rikNavigation"
-    );
-
-
-const navRevealZone =
-    document.getElementById(
-        "navRevealZone"
-    );
-
-
-let navHideTimer = null;
-
-
-const TOUCH_REVEAL_DISTANCE = 35;
-
-
-// ==========================================
-// SHOW NAVIGATION
-// ==========================================
-
-function showNavigation() {
-
-    if (!rikNavigation) {
-        return;
-    }
-
-    clearTimeout(navHideTimer);
-
-    rikNavigation.classList.add(
-        "nav-visible"
-    );
-
-    navHideTimer =
-        setTimeout(
-            () => {
-
-                hideNavigation();
-
-            },
-            2200
-        );
-
-}
-
-
-// ==========================================
-// HIDE NAVIGATION
-// ==========================================
-
-function hideNavigation() {
-
-    if (!rikNavigation) {
-        return;
-    }
-
-    if (
-        rikNavigation.matches(":hover")
-    ) {
-
-        return;
-
-    }
-
-    rikNavigation.classList.remove(
-        "nav-visible"
-    );
-
-}
-
-
-// ==========================================
-// DELAYED NAV HIDE
-// ==========================================
-
-function scheduleNavHide() {
-
-    clearTimeout(navHideTimer);
-
-    navHideTimer =
-        setTimeout(
-            () => {
-
-                hideNavigation();
-
-            },
-            900
-        );
-
-}
-
-
-// ==========================================
-// NAV REVEAL ZONE
-// ==========================================
-
-if (navRevealZone) {
-
-    navRevealZone.addEventListener(
-        "mouseenter",
-        () => {
-
-            showNavigation();
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// NAV MOUSE EVENTS
-// ==========================================
-
-if (rikNavigation) {
-
-    rikNavigation.addEventListener(
-        "mouseenter",
-        () => {
-
-            clearTimeout(navHideTimer);
-
-            rikNavigation.classList.add(
-                "nav-visible"
-            );
-
-        }
-    );
-
-
-    rikNavigation.addEventListener(
-        "mouseleave",
-        () => {
-
-            scheduleNavHide();
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// MOUSE NAV REVEAL
-// ONLY VERY CLOSE TO BOTTOM CENTRE
-// ==========================================
-
-document.addEventListener(
-    "pointermove",
-    event => {
-
-        if (
-            event.pointerType === "touch"
-        ) {
-
-            return;
-
-        }
-
-
-        const bottomDistance =
-            window.innerHeight -
-            event.clientY;
-
-
-        const screenCenter =
-            window.innerWidth / 2;
-
-
-        const distanceFromCenter =
-            Math.abs(
-                event.clientX -
-                screenCenter
-            );
-
-
-        const isBottom =
-            bottomDistance <= 25;
-
-
-        const isCenter =
-            distanceFromCenter <= 100;
-
-
-        if (
-            isBottom &&
-            isCenter
-        ) {
-
-            showNavigation();
-
-        }
-
-    },
-    {
-        passive: true
-    }
-);
-
-
-// ==========================================
-// TOUCH NAV REVEAL
-// ONLY VERY CLOSE TO BOTTOM CENTRE
-// ==========================================
-
-document.addEventListener(
-    "touchstart",
-    event => {
-
-        const touch =
-            event.touches[0];
-
-
-        if (!touch) {
-            return;
-        }
-
-
-        const distanceFromBottom =
-            window.innerHeight -
-            touch.clientY;
-
-
-        const screenCenter =
-            window.innerWidth / 2;
-
-
-        const distanceFromCenter =
-            Math.abs(
-                touch.clientX -
-                screenCenter
-            );
-
-
-        const isBottom =
-            distanceFromBottom <=
-            TOUCH_REVEAL_DISTANCE;
-
-
-        const isCenter =
-            distanceFromCenter <= 110;
-
-
-        if (
-            isBottom &&
-            isCenter
-        ) {
-
-            showNavigation();
-
-        }
-
-    },
-    {
-        passive: true
-    }
-);
-
-
-// ==========================================
-// PAGE ELEMENTS
-// ==========================================
-
-const controlPage =
-    document.getElementById(
-        "controlPage"
-    );
-
-
-const settingsPage =
-    document.getElementById(
-        "settingsPage"
-    );
-
-
-const demoPage =
-    document.getElementById(
-        "demoPage"
-    );
-
-
-const labPage =
-    document.getElementById(
-        "labPage"
-    );
-
-
-// ==========================================
-// PAGE SWITCHING
-// ==========================================
-
-function showPage(page) {
-
-    // Hide all pages
-    if (controlPage) {
-
-        controlPage.style.display =
-            "none";
-
-    }
-
-
-    if (settingsPage) {
-
-        settingsPage.style.display =
-            "none";
-
-    }
-
-
-    if (demoPage) {
-
-        demoPage.style.display =
-            "none";
-
-    }
-
-
-    if (labPage) {
-
-        labPage.style.display =
-            "none";
-
-    }
-
-
-    // Show requested page
-    if (
-        page === "control" &&
-        controlPage
-    ) {
-
-        controlPage.style.display =
-            "block";
-
-    }
-
-
-    else if (
-        page === "settings" &&
-        settingsPage
-    ) {
-
-        settingsPage.style.display =
-            "block";
-
-    }
-
-
-    else if (
-        page === "demo" &&
-        demoPage
-    ) {
-
-        demoPage.style.display =
-            "block";
-
-    }
-
-
-    else if (
-        page === "lab" &&
-        labPage
-    ) {
-
-        labPage.style.display =
-            "block";
-
-    }
-
-
-    console.log(
-        "RIK PAGE:",
-        page
-    );
-
-}
-
-
-// ==========================================
-// NAVIGATION BUTTONS
-// ==========================================
-
-if (rikNavigation) {
-
-    const navItems =
-        rikNavigation.querySelectorAll(
-            ".nav-item"
-        );
-
-
-    navItems.forEach(
-        item => {
-
-            item.addEventListener(
-                "click",
-                () => {
-
-                    navItems.forEach(
-                        button => {
-
-                            button.classList.remove(
-                                "active"
-                            );
-
-                        }
-                    );
-
-
-                    item.classList.add(
-                        "active"
-                    );
-
-
-                    const page =
-                        item.dataset.page;
-
-
-                    showPage(page);
-
-
-                    showNavigation();
-
-                }
-            );
-
-        }
-    );
-
-}
-
-
-// ==========================================
-// BUTTON SIZE SETTING
-// ==========================================
-
-const buttonSizeSlider =
-    document.getElementById(
-        "buttonSizeSlider"
-    );
-
-
-const buttonSizeValue =
-    document.getElementById(
-        "buttonSizeValue"
-    );
-
-
-function updateButtonSize() {
-
-    if (!buttonSizeSlider) {
-
-        return;
-
-    }
-
-
-    const size =
-        Number(
-            buttonSizeSlider.value
-        );
-
-
-    if (buttonSizeValue) {
-
-        buttonSizeValue.textContent =
-            `${size}%`;
-
-    }
-
-
-    document.documentElement.style
-        .setProperty(
-            "--rik-button-scale",
-            size / 100
-        );
-
-}
-
-
-if (buttonSizeSlider) {
-
-    buttonSizeSlider.addEventListener(
-        "input",
-        updateButtonSize
-    );
-
-
-    updateButtonSize();
-
-}
-
-
-// ==========================================
-// SENSOR DEMO
-// ==========================================
-
-function updateDemoSensors() {
-
-    const soilValue =
-        document.getElementById(
-            "soilValue"
-        );
-
-
-    const soilProgress =
-        document.getElementById(
-            "soilProgress"
-        );
-
-
-    const soilStatus =
-        document.getElementById(
-            "soilStatus"
-        );
-
-
-    if (soilValue) {
-
-        soilValue.textContent =
-            "--%";
-
-    }
-
-
-    if (soilProgress) {
-
-        soilProgress.style.width =
-            "0%";
-
-    }
-
-
-    if (soilStatus) {
-
-        soilStatus.textContent =
-            "Waiting for sensor";
-
-    }
-
-}
-
-
-// ==========================================
-// INITIALIZE
-// ==========================================
-
-updateDemoSensors();
-
-updateTimerDisplay();
-
-
-// Start on Controller
-
-showPage("control");
-
-
-// Make Control active
-
-if (rikNavigation) {
-
-    const navItems =
-        rikNavigation.querySelectorAll(
-            ".nav-item"
-        );
-
-
-    navItems.forEach(
-        item => {
-
-            item.classList.toggle(
-                "active",
-                item.dataset.page === "control"
-            );
-
-        }
-    );
-
-
-    rikNavigation.classList.remove(
-        "nav-visible"
-    );
-
-}
-
-
 /* =========================================================
-   RIK PWA SERVICE WORKER
-   ========================================================= */
-
-if (
-    "serviceWorker" in navigator
-) {
-
-    window.addEventListener(
-        "load",
-        () => {
-
-            navigator.serviceWorker
-                .register("./sw.js")
-                .then(
-                    registration => {
-
-                        console.log(
-                            "RIK Service Worker registered:",
-                            registration.scope
-                        );
-
-                    }
-                )
-                .catch(
-                    error => {
-
-                        console.error(
-                            "RIK Service Worker registration failed:",
-                            error
-                        );
-
-                    }
-                );
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   RIK PWA INSTALL
-   ========================================================= */
-
-let deferredInstallPrompt = null;
-
-
-/* =========================================================
-   INSTALL ELEMENTS
-   ========================================================= */
-
-const installCard =
-    document.getElementById("installCard");
-
-const installButton =
-    document.getElementById("installAppButton");
-
-
-/* =========================================================
-   KEEP INSTALL CARD VISIBLE
-   ========================================================= */
-
-if (installCard) {
-
-    installCard.style.display = "flex";
-
-}
-
-
-/* =========================================================
-   BROWSER INSTALL PROMPT
-   ========================================================= */
-
-window.addEventListener(
-    "beforeinstallprompt",
-    event => {
-
-        console.log(
-            "RIK: Install prompt available."
-        );
-
-
-        event.preventDefault();
-
-
-        deferredInstallPrompt = event;
-
-    }
-);
-
-
-/* =========================================================
-   INSTALL BUTTON
-   ========================================================= */
-
-if (installButton) {
-
-    installButton.addEventListener(
-        "click",
-        async () => {
-
-
-            /* -----------------------------------------
-               NATIVE INSTALL PROMPT AVAILABLE
-            ----------------------------------------- */
-
-            if (deferredInstallPrompt) {
-
-                try {
-
-                    await deferredInstallPrompt.prompt();
-
-
-                    const result =
-                        await deferredInstallPrompt.userChoice;
-
-
-                    console.log(
-                        "RIK install result:",
-                        result.outcome
-                    );
-
-
-                    deferredInstallPrompt = null;
-
-
-                } catch (error) {
-
-                    console.error(
-                        "RIK install error:",
-                        error
-                    );
-
-                }
-
-
-                return;
-
-            }
-
-
-
-            /* -----------------------------------------
-               CHECK IF ALREADY INSTALLED
-            ----------------------------------------- */
-
-            const isStandalone =
-                window.matchMedia(
-                    "(display-mode: standalone)"
-                ).matches ||
-                window.navigator.standalone === true;
-
-
-            if (isStandalone) {
-
-                alert(
-                    "RIK is already installed on this device."
-                );
-
-
-                return;
-
-            }
-
-
-
-            /* -----------------------------------------
-               iPHONE / iPAD
-            ----------------------------------------- */
-
-            const isIOS =
-                /iphone|ipad|ipod/i.test(
-                    navigator.userAgent
-                );
-
-
-            if (isIOS) {
-
-                alert(
-                    "To install RIK on iPhone or iPad:\n\n" +
-                    "1. Open RIK in Safari.\n" +
-                    "2. Tap the Share button.\n" +
-                    "3. Select 'Add to Home Screen'.\n" +
-                    "4. Tap 'Add'."
-                );
-
-
-                return;
-
-            }
-
-
-
-            /* -----------------------------------------
-               ANDROID / DESKTOP FALLBACK
-            ----------------------------------------- */
-
-            alert(
-                "RIK cannot open the automatic install prompt " +
-                "in this browser right now.\n\n" +
-                "Open your browser menu and look for:\n\n" +
-                "• Install RIK\n" +
-                "• Install app\n" +
-                "• Add to Home screen"
-            );
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   APP INSTALLED
-   ========================================================= */
-
-window.addEventListener(
-    "appinstalled",
-    () => {
-
-        console.log(
-            "RIK has been installed successfully."
-        );
-
-
-        deferredInstallPrompt = null;
-
-    }
-);
-
-
-// ==========================================
-// START ESP32 CONNECTION
-// ==========================================
-
-connectESP32();// ==========================================
-// RIK FORCE FULLSCREEN
-// ==========================================
-
-async function enterRIKFullscreen() {
-
-    try {
-
-        // Already fullscreen
-        if (document.fullscreenElement) {
-            return;
-        }
-
-        // Browser supports Fullscreen API
-        if (document.documentElement.requestFullscreen) {
-
-            await document.documentElement.requestFullscreen({
-                navigationUI: "hide"
-            });
-
-            console.log(
-                "RIK: Fullscreen enabled"
-            );
-
-        }
-
-    } catch (error) {
-
-        console.log(
-            "RIK: Fullscreen request was blocked:",
-            error
-        );
-
-    }
-
-}
-
-
-// ==========================================
-// ENTER FULLSCREEN ON FIRST USER INTERACTION
-// ==========================================
-
-let rikFullscreenRequested = false;
-
-function requestRIKFullscreen() {
-
-    if (rikFullscreenRequested) {
-        return;
-    }
-
-    rikFullscreenRequested = true;
-
-    enterRIKFullscreen();
-
-}
-
-
-// Touch devices
-document.addEventListener(
-    "touchstart",
-    requestRIKFullscreen,
-    {
-        once: true,
-        passive: true
-    }
-);
-
-
-// Mouse / desktop
-document.addEventListener(
-    "mousedown",
-    requestRIKFullscreen,
-    {
-        once: true
-    }
-);
-
-
-// Keyboard
-document.addEventListener(
-    "keydown",
-    requestRIKFullscreen,
-    {
-        once: true
-    }
-);/* =========================================================
-   RIK AUTO-FRAME ENGINE
-   Dynamically sizes and centers the robot controls.
+   RIK — ROBOT IN KONTROL
+   FULL APP.JS
+   ESP32 IP CONFIGURATION
    ========================================================= */
 
 (() => {
     "use strict";
 
-    let frameAnimation = null;
+    /* =====================================================
+       STORAGE
+       ===================================================== */
 
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
+    const ESP32_IP_KEY = "rik_esp32_ip";
+    const ESP32_PORT_KEY = "rik_esp32_port";
+
+    const DEFAULT_PORT = "81";
+
+
+    /* =====================================================
+       ESP32 CONFIG
+       ===================================================== */
+
+    const ESP32 = {
+        socket: null,
+        reconnectTimer: null,
+        heartbeatTimer: null,
+        reconnectDelay: 1000,
+        reconnectMax: 10000,
+        connectionTimeout: null,
+        commandId: 0,
+        pending: new Map()
+    };
+
+
+    /* =====================================================
+       APP STATE
+       ===================================================== */
+
+    const state = {
+        connected: false,
+
+        speed: 65,
+
+        driveCommand: null,
+
+        armState: "READY",
+
+        clawState: "READY",
+
+        soil: "--",
+
+        air: "--",
+
+        timer: 0,
+
+        timerRunning: false,
+
+        timerInterval: null
+    };
+
+
+    /* =====================================================
+       HELPERS
+       ===================================================== */
+
+    const $ = (selector, root = document) =>
+        root.querySelector(selector);
+
+
+    const $$ = (selector, root = document) =>
+        Array.from(root.querySelectorAll(selector));
+
+
+    /* =====================================================
+       ESP32 SETTINGS
+       ===================================================== */
+
+    function getESP32Settings() {
+
+        return {
+            ip:
+                localStorage.getItem(
+                    ESP32_IP_KEY
+                ) || "",
+
+            port:
+                localStorage.getItem(
+                    ESP32_PORT_KEY
+                ) || DEFAULT_PORT
+        };
+
     }
 
-    function px(value) {
-        return `${Math.round(value * 10) / 10}px`;
-    }
 
-    function getNumberVariable(name, fallback = 1) {
-        const value = parseFloat(
-            getComputedStyle(document.documentElement)
-                .getPropertyValue(name)
-        );
+    function saveESP32Settings(ip, port) {
 
-        return Number.isFinite(value) ? value : fallback;
-    }
+        ip =
+            String(ip || "")
+                .trim();
 
-    function autoFitRIKControls() {
-        if (frameAnimation) {
-            cancelAnimationFrame(frameAnimation);
+        port =
+            String(port || DEFAULT_PORT)
+                .trim();
+
+
+        if (!ip) {
+
+            return {
+                success: false,
+                error: "PLEASE ENTER ESP32 IP ADDRESS"
+            };
+
         }
 
-        frameAnimation = requestAnimationFrame(() => {
-            frameAnimation = null;
 
-            const root = document.documentElement;
+        if (!/^[0-9a-fA-F:.]+$/.test(ip)) {
 
-            const app = document.querySelector("#app");
-            const movementPanel =
-                document.querySelector(".movement-panel");
+            return {
+                success: false,
+                error: "INVALID IP ADDRESS"
+            };
 
-            const movementContent =
-                document.querySelector(".movement-content");
+        }
 
-            const movementPad =
-                document.querySelector(".movement-pad");
 
-            const speedControl =
-                document.querySelector(".speed-control");
+        const portNumber =
+            Number(port);
 
-            const armPanel =
-                document.querySelector(".arm-claw-panel");
 
-            const armGrid =
-                document.querySelector(".arm-claw-grid");
+        if (
+            !Number.isInteger(portNumber) ||
+            portNumber < 1 ||
+            portNumber > 65535
+        ) {
 
-            if (
-                !app ||
-                !movementPanel ||
-                !movementContent ||
-                !movementPad
-            ) {
-                return;
+            return {
+                success: false,
+                error: "INVALID PORT"
+            };
+
+        }
+
+
+        localStorage.setItem(
+            ESP32_IP_KEY,
+            ip
+        );
+
+
+        localStorage.setItem(
+            ESP32_PORT_KEY,
+            String(portNumber)
+        );
+
+
+        return {
+            success: true
+        };
+
+    }
+
+
+    function getESP32URL() {
+
+        const settings =
+            getESP32Settings();
+
+
+        if (!settings.ip) {
+
+            return null;
+
+        }
+
+
+        return (
+            "ws://" +
+            settings.ip +
+            ":" +
+            settings.port
+        );
+
+    }
+
+
+    /* =====================================================
+       CONNECTION STATUS
+       ===================================================== */
+
+    function updateConnectionUI() {
+
+        const connected =
+            state.connected;
+
+
+        const text =
+            $("#connectionText");
+
+
+        if (text) {
+
+            text.textContent =
+                connected
+                    ? "CONNECTED"
+                    : "OFFLINE";
+
+        }
+
+
+        const dot =
+            $("#connectionDot");
+
+
+        if (dot) {
+
+            dot.classList.toggle(
+                "offline",
+                !connected
+            );
+
+        }
+
+
+        const status =
+            $("#esp32SettingsStatus");
+
+
+        if (status) {
+
+            if (connected) {
+
+                status.textContent =
+                    "CONNECTED";
+
+                status.className =
+                    "esp32-status connected";
+
+            } else {
+
+                const settings =
+                    getESP32Settings();
+
+
+                status.textContent =
+                    settings.ip
+                        ? "OFFLINE"
+                        : "ENTER ESP32 IP";
+
+                status.className =
+                    "esp32-status offline";
+
             }
 
-            /* ---------------------------------------------
-               1. VIEWPORT
-               --------------------------------------------- */
+        }
 
-            const viewport =
-                window.visualViewport;
 
-            const viewportWidth =
-                viewport?.width || window.innerWidth;
+        const robotStatus =
+            $("#robotStatus");
 
-            const viewportHeight =
-                viewport?.height || window.innerHeight;
 
-            root.style.setProperty(
-                "--rik-viewport-width",
-                px(viewportWidth)
+        if (robotStatus) {
+
+            robotStatus.textContent =
+                connected
+                    ? "CONNECTED"
+                    : "OFFLINE";
+
+        }
+
+
+        /*
+         * Safety:
+         * stop movement immediately when connection disappears.
+         */
+
+        if (!connected) {
+
+            stopDrive(
+                false
             );
 
-            root.style.setProperty(
-                "--rik-viewport-height",
-                px(viewportHeight)
-            );
+        }
+
+    }
 
 
-            /* ---------------------------------------------
-               2. MOVEMENT PANEL
-               --------------------------------------------- */
+    /* =====================================================
+       CREATE ESP32 SETTINGS CARD
+       ===================================================== */
 
-            const panelRect =
-                movementPanel.getBoundingClientRect();
+    function createESP32SettingsCard() {
 
-            const contentRect =
-                movementContent.getBoundingClientRect();
+        /*
+         * If it already exists,
+         * don't create another one.
+         */
 
-            if (
-                panelRect.width <= 0 ||
-                panelRect.height <= 0
-            ) {
-                return;
-            }
+        if (
+            document.querySelector(
+                "#esp32ConnectionCard"
+            )
+        ) {
 
-
-            /* ---------------------------------------------
-               3. AVAILABLE MOVEMENT SPACE
-               --------------------------------------------- */
-
-            const horizontalPadding =
-                Math.max(8, contentRect.width * 0.025);
-
-            const verticalPadding =
-                Math.max(5, contentRect.height * 0.025);
-
-            let availableWidth =
-                contentRect.width -
-                horizontalPadding * 2;
-
-            let availableHeight =
-                contentRect.height -
-                verticalPadding * 2;
+            return;
+        }
 
 
-            /* Leave room for speed slider. */
-
-            if (speedControl) {
-                const speedRect =
-                    speedControl.getBoundingClientRect();
-
-                const speedHeight =
-                    speedRect.height;
-
-                availableHeight -=
-                    speedHeight + 8;
-            }
-
-
-            /* ---------------------------------------------
-               4. CALCULATE THE LARGEST SAFE SQUARE
-               --------------------------------------------- */
-
-            let movementSize =
-                Math.min(
-                    availableWidth,
-                    availableHeight
-                );
-
-
-            /*
-             * Never allow the pad to consume absolutely
-             * everything. Keep a little breathing room.
-             */
-
-            movementSize *= 0.96;
-
-
-            /*
-             * Hard limits prevent absurd sizing on
-             * tablets/desktops.
-             */
-
-            const maxMovementSize =
-                viewportWidth < 600
-                    ? viewportWidth * 0.78
-                    : 460;
-
-            movementSize =
-                Math.min(
-                    movementSize,
-                    maxMovementSize
-                );
-
-
-            /*
-             * Minimum prevents controls becoming tiny
-             * during browser resize.
-             */
-
-            movementSize =
-                Math.max(
-                    movementSize,
-                    170
-                );
-
-
-            /* ---------------------------------------------
-               5. MOVEMENT PAD
-               --------------------------------------------- */
-
-            root.style.setProperty(
-                "--rik-movement-size",
-                px(movementSize)
-            );
-
-            movementPad.style.width =
-                px(movementSize);
-
-            movementPad.style.height =
-                px(movementSize);
-
-            movementPad.style.aspectRatio =
-                "1 / 1";
-
-            movementPad.style.margin =
-                "auto";
-
-            movementPad.style.alignSelf =
-                "center";
-
-
-            /* ---------------------------------------------
-               6. MOVEMENT BUTTON SCALE
-               --------------------------------------------- */
-
-            const slider =
-                document.querySelector(
-                    "#buttonSizeSlider"
-                );
-
-            let sliderValue = 100;
-
-            if (slider) {
-                sliderValue =
-                    parseFloat(slider.value) || 100;
-            }
-
-            const requestedScale =
-                sliderValue / 100;
-
-
-            /*
-             * Calculate the actual grid cell.
-             *
-             * 3 columns + 2 gaps
-             */
-
-            const padStyles =
-                getComputedStyle(movementPad);
-
-            const gap =
-                parseFloat(padStyles.columnGap) || 8;
-
-            const cellSize =
-                (
-                    movementSize -
-                    gap * 2
-                ) / 3;
-
-
-            /*
-             * The slider can request 130%, but we NEVER
-             * allow a button to escape its grid cell.
-             */
-
-            const maximumSafeScale =
-                1;
-
-            const actualScale =
-                Math.min(
-                    requestedScale,
-                    maximumSafeScale
-                );
-
-            const buttonSize =
-                cellSize * actualScale;
-
-
-            root.style.setProperty(
-                "--rik-cell-size",
-                px(cellSize)
-            );
-
-            root.style.setProperty(
-                "--rik-button-size",
-                px(buttonSize)
-            );
-
-            root.style.setProperty(
-                "--rik-button-scale",
-                actualScale
+        const settingsPage =
+            document.querySelector(
+                "#settingsPage"
             );
 
 
-            /* ---------------------------------------------
-               7. FORCE MOVEMENT BUTTON FIT
-               --------------------------------------------- */
+        if (!settingsPage) {
 
-            const movementButtons =
-                movementPad.querySelectorAll(
-                    ".control-button"
+            console.warn(
+                "[RIK] #settingsPage not found."
+            );
+
+            return;
+
+        }
+
+
+        /*
+         * -------------------------------------------------
+         * Create CSS
+         * -------------------------------------------------
+         */
+
+        if (
+            !document.querySelector(
+                "#rik-esp32-settings-css"
+            )
+        ) {
+
+            const style =
+                document.createElement(
+                    "style"
                 );
 
-            movementButtons.forEach(button => {
 
-                button.style.width =
-                    px(buttonSize);
-
-                button.style.height =
-                    px(buttonSize);
-
-                button.style.maxWidth =
-                    px(cellSize);
-
-                button.style.maxHeight =
-                    px(cellSize);
-
-                button.style.minWidth =
-                    "0";
-
-                button.style.minHeight =
-                    "0";
-
-                button.style.boxSizing =
-                    "border-box";
-
-                button.style.justifySelf =
-                    "center";
-
-                button.style.alignSelf =
-                    "center";
-            });
+            style.id =
+                "rik-esp32-settings-css";
 
 
-            /* ---------------------------------------------
-               8. ARM + CLAW AUTO FIT
-               --------------------------------------------- */
+            style.textContent = `
 
-            if (armPanel && armGrid) {
+                #esp32ConnectionCard {
 
-                const armRect =
-                    armPanel.getBoundingClientRect();
+                    position: relative;
 
-                const gridRect =
-                    armGrid.getBoundingClientRect();
+                    width: 100%;
 
-                if (
-                    gridRect.width > 0 &&
-                    gridRect.height > 0
-                ) {
+                    box-sizing: border-box;
 
-                    const armGap =
-                        parseFloat(
-                            getComputedStyle(armGrid)
-                                .gap
-                        ) || 8;
+                    margin: 0 0 28px 0;
 
-                    const armColumnWidth =
-                        (
-                            gridRect.width -
-                            armGap
-                        ) / 2;
+                    padding: 26px;
 
-                    const armRowHeight =
-                        (
-                            gridRect.height -
-                            armGap
-                        ) / 2;
+                    border-radius: 22px;
 
-                    /*
-                     * Keep arm/claw controls within their
-                     * available cells.
-                     */
+                    border: 1px solid
+                        rgba(255,255,255,0.16);
 
-                    const actionSize =
-                        Math.min(
-                            armColumnWidth,
-                            armRowHeight
+                    background:
+                        linear-gradient(
+                            135deg,
+                            rgba(30,30,32,0.92),
+                            rgba(12,12,14,0.92)
                         );
 
-                    root.style.setProperty(
-                        "--rik-action-size",
-                        px(actionSize)
+                    box-shadow:
+                        inset 0 1px 0
+                            rgba(255,255,255,0.08),
+                        0 20px 50px
+                            rgba(0,0,0,0.35);
+
+                    color: white;
+
+                    backdrop-filter:
+                        blur(18px);
+
+                    -webkit-backdrop-filter:
+                        blur(18px);
+
+                }
+
+
+                #esp32ConnectionCard
+                .esp32-card-title {
+
+                    display: flex;
+
+                    align-items: center;
+
+                    justify-content:
+                        space-between;
+
+                    gap: 20px;
+
+                    margin-bottom: 8px;
+
+                }
+
+
+                #esp32ConnectionCard
+                .esp32-card-title h3 {
+
+                    margin: 0;
+
+                    font-size: 15px;
+
+                    font-weight: 800;
+
+                    letter-spacing:
+                        0.12em;
+
+                }
+
+
+                #esp32ConnectionCard
+                .esp32-card-subtitle {
+
+                    margin: 0 0 22px;
+
+                    color:
+                        rgba(255,255,255,0.45);
+
+                    font-size: 11px;
+
+                }
+
+
+                .esp32-form-row {
+
+                    display: grid;
+
+                    grid-template-columns:
+                        minmax(0, 1fr)
+                        130px;
+
+                    gap: 14px;
+
+                    margin-bottom: 16px;
+
+                }
+
+
+                .esp32-field {
+
+                    display: flex;
+
+                    flex-direction: column;
+
+                    gap: 8px;
+
+                }
+
+
+                .esp32-field label {
+
+                    font-size: 9px;
+
+                    font-weight: 800;
+
+                    letter-spacing:
+                        0.12em;
+
+                    color:
+                        rgba(255,255,255,0.48);
+
+                }
+
+
+                .esp32-field input {
+
+                    width: 100%;
+
+                    box-sizing: border-box;
+
+                    height: 46px;
+
+                    padding:
+                        0 15px;
+
+                    border-radius: 12px;
+
+                    border: 1px solid
+                        rgba(255,255,255,0.14);
+
+                    outline: none;
+
+                    background:
+                        rgba(255,255,255,0.055);
+
+                    color: white;
+
+                    font-family:
+                        inherit;
+
+                    font-size: 13px;
+
+                    transition:
+                        border-color .2s ease,
+                        background .2s ease,
+                        box-shadow .2s ease;
+
+                }
+
+
+                .esp32-field input::placeholder {
+
+                    color:
+                        rgba(255,255,255,0.25);
+
+                }
+
+
+                .esp32-field input:focus {
+
+                    border-color:
+                        rgba(0,255,120,0.65);
+
+                    background:
+                        rgba(255,255,255,0.08);
+
+                    box-shadow:
+                        0 0 0 3px
+                        rgba(0,255,120,0.08);
+
+                }
+
+
+                .esp32-buttons {
+
+                    display: flex;
+
+                    gap: 10px;
+
+                    flex-wrap: wrap;
+
+                }
+
+
+                .esp32-btn {
+
+                    min-height: 42px;
+
+                    padding:
+                        0 18px;
+
+                    border-radius: 12px;
+
+                    border: 1px solid
+                        rgba(255,255,255,0.12);
+
+                    background:
+                        rgba(255,255,255,0.06);
+
+                    color: white;
+
+                    font-family:
+                        inherit;
+
+                    font-size: 10px;
+
+                    font-weight: 800;
+
+                    letter-spacing:
+                        0.08em;
+
+                    cursor: pointer;
+
+                    transition:
+                        transform .15s ease,
+                        background .15s ease,
+                        border-color .15s ease;
+
+                }
+
+
+                .esp32-btn:hover {
+
+                    background:
+                        rgba(255,255,255,0.11);
+
+                    border-color:
+                        rgba(255,255,255,0.25);
+
+                    transform:
+                        translateY(-1px);
+
+                }
+
+
+                .esp32-btn:active {
+
+                    transform:
+                        translateY(1px);
+
+                }
+
+
+                .esp32-btn.primary {
+
+                    background:
+                        linear-gradient(
+                            135deg,
+                            #19e875,
+                            #00b95a
+                        );
+
+                    border-color:
+                        rgba(0,255,120,0.5);
+
+                    color: #00150a;
+
+                    box-shadow:
+                        0 8px 25px
+                        rgba(0,220,100,0.18);
+
+                }
+
+
+                .esp32-btn.primary:hover {
+
+                    background:
+                        linear-gradient(
+                            135deg,
+                            #35f58b,
+                            #08ce68
+                        );
+
+                }
+
+
+                .esp32-status-row {
+
+                    display: flex;
+
+                    align-items: center;
+
+                    justify-content:
+                        space-between;
+
+                    gap: 15px;
+
+                    margin-top: 20px;
+
+                    padding-top: 18px;
+
+                    border-top:
+                        1px solid
+                        rgba(255,255,255,0.08);
+
+                }
+
+
+                .esp32-status {
+
+                    display: inline-flex;
+
+                    align-items: center;
+
+                    gap: 8px;
+
+                    font-size: 10px;
+
+                    font-weight: 800;
+
+                    letter-spacing:
+                        0.08em;
+
+                }
+
+
+                .esp32-status::before {
+
+                    content: "";
+
+                    width: 8px;
+
+                    height: 8px;
+
+                    border-radius: 50%;
+
+                    background:
+                        #777;
+
+                    box-shadow:
+                        0 0 0 5px
+                        rgba(255,255,255,0.04);
+
+                }
+
+
+                .esp32-status.connected {
+
+                    color:
+                        #20e878;
+
+                }
+
+
+                .esp32-status.connected::before {
+
+                    background:
+                        #20e878;
+
+                    box-shadow:
+                        0 0 0 5px
+                        rgba(32,232,120,0.10),
+                        0 0 15px
+                        rgba(32,232,120,0.7);
+
+                }
+
+
+                .esp32-status.offline {
+
+                    color:
+                        rgba(255,255,255,0.5);
+
+                }
+
+
+                .esp32-status.testing {
+
+                    color:
+                        #ffd84d;
+
+                }
+
+
+                .esp32-status.testing::before {
+
+                    background:
+                        #ffd84d;
+
+                }
+
+
+                .esp32-status.error {
+
+                    color:
+                        #ff5353;
+
+                }
+
+
+                .esp32-status.error::before {
+
+                    background:
+                        #ff5353;
+
+                }
+
+
+                .esp32-current {
+
+                    font-size: 9px;
+
+                    color:
+                        rgba(255,255,255,0.35);
+
+                }
+
+
+                @media (max-width: 700px) {
+
+                    .esp32-form-row {
+
+                        grid-template-columns:
+                            1fr;
+
+                    }
+
+                }
+
+            `;
+
+
+            document.head.appendChild(
+                style
+            );
+
+        }
+
+
+        /*
+         * -------------------------------------------------
+         * Create card
+         * -------------------------------------------------
+         */
+
+        const card =
+            document.createElement(
+                "section"
+            );
+
+
+        card.id =
+            "esp32ConnectionCard";
+
+
+        card.innerHTML = `
+
+            <div class="esp32-card-title">
+
+                <h3>
+                    ESP32 CONNECTION
+                </h3>
+
+                <div
+                    id="esp32SettingsStatus"
+                    class="esp32-status offline"
+                >
+                    ENTER ESP32 IP
+                </div>
+
+            </div>
+
+
+            <p class="esp32-card-subtitle">
+                Configure the IP address of your ESP32 robot controller.
+            </p>
+
+
+            <div class="esp32-form-row">
+
+                <div class="esp32-field">
+
+                    <label for="esp32IpInput">
+                        ESP32 IP ADDRESS
+                    </label>
+
+                    <input
+                        id="esp32IpInput"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        spellcheck="false"
+                        placeholder="192.168.1.100"
+                    />
+
+                </div>
+
+
+                <div class="esp32-field">
+
+                    <label for="esp32PortInput">
+                        WEBSOCKET PORT
+                    </label>
+
+                    <input
+                        id="esp32PortInput"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        value="81"
+                    />
+
+                </div>
+
+            </div>
+
+
+            <div class="esp32-buttons">
+
+                <button
+                    id="saveESP32Button"
+                    class="esp32-btn primary"
+                    type="button"
+                >
+                    SAVE & CONNECT
+                </button>
+
+
+                <button
+                    id="testESP32Button"
+                    class="esp32-btn"
+                    type="button"
+                >
+                    TEST CONNECTION
+                </button>
+
+
+                <button
+                    id="disconnectESP32Button"
+                    class="esp32-btn"
+                    type="button"
+                >
+                    DISCONNECT
+                </button>
+
+            </div>
+
+
+            <div class="esp32-status-row">
+
+                <div
+                    id="esp32ConnectionMessage"
+                    class="esp32-current"
+                >
+                    No ESP32 IP configured.
+                </div>
+
+                <div
+                    id="esp32CurrentAddress"
+                    class="esp32-current"
+                >
+                    —
+                </div>
+
+            </div>
+
+        `;
+
+
+        /*
+         * -------------------------------------------------
+         * Insert card BEFORE ROBOT section
+         * -------------------------------------------------
+         */
+
+        const robotHeading =
+            Array.from(
+                settingsPage.querySelectorAll(
+                    "*"
+                )
+            ).find(
+                element =>
+                    element.textContent
+                        ?.trim()
+                        .toUpperCase() ===
+                    "ROBOT"
+            );
+
+
+        if (
+            robotHeading &&
+            robotHeading.parentElement
+        ) {
+
+            robotHeading.parentElement
+                .insertBefore(
+                    card,
+                    robotHeading.parentElement
+                        .firstChild
+                );
+
+        } else {
+
+            /*
+             * Fallback:
+             * insert near the top of settings.
+             */
+
+            const firstSection =
+                settingsPage.firstElementChild;
+
+
+            if (firstSection) {
+
+                settingsPage.insertBefore(
+                    card,
+                    firstSection
+                );
+
+            } else {
+
+                settingsPage.appendChild(
+                    card
+                );
+
+            }
+
+        }
+
+
+        bindESP32Settings();
+
+        loadESP32Settings();
+
+    }
+
+
+    /* =====================================================
+       SET ESP32 STATUS
+       ===================================================== */
+
+    function setESP32Status(
+        message,
+        type = "offline"
+    ) {
+
+        const status =
+            $("#esp32SettingsStatus");
+
+
+        if (!status) {
+
+            return;
+
+        }
+
+
+        status.textContent =
+            message;
+
+
+        status.className =
+            `esp32-status ${type}`;
+
+    }
+
+
+    /* =====================================================
+       UPDATE ADDRESS DISPLAY
+       ===================================================== */
+
+    function updateESP32Address() {
+
+        const settings =
+            getESP32Settings();
+
+
+        const address =
+            $("#esp32CurrentAddress");
+
+
+        const message =
+            $("#esp32ConnectionMessage");
+
+
+        if (address) {
+
+            address.textContent =
+                settings.ip
+                    ? `${settings.ip}:${settings.port}`
+                    : "—";
+
+        }
+
+
+        if (message) {
+
+            message.textContent =
+                settings.ip
+                    ? `Controller: ${settings.ip}:${settings.port}`
+                    : "No ESP32 IP configured.";
+
+        }
+
+    }
+
+
+    /* =====================================================
+       LOAD SETTINGS
+       ===================================================== */
+
+    function loadESP32Settings() {
+
+        const settings =
+            getESP32Settings();
+
+
+        const ipInput =
+            $("#esp32IpInput");
+
+
+        const portInput =
+            $("#esp32PortInput");
+
+
+        if (ipInput) {
+
+            ipInput.value =
+                settings.ip;
+
+        }
+
+
+        if (portInput) {
+
+            portInput.value =
+                settings.port;
+
+        }
+
+
+        updateESP32Address();
+
+
+        if (settings.ip) {
+
+            setESP32Status(
+                state.connected
+                    ? "CONNECTED"
+                    : "OFFLINE",
+                state.connected
+                    ? "connected"
+                    : "offline"
+            );
+
+        } else {
+
+            setESP32Status(
+                "ENTER ESP32 IP",
+                "offline"
+            );
+
+        }
+
+    }
+
+
+    /* =====================================================
+       BIND SETTINGS BUTTONS
+       ===================================================== */
+
+    function bindESP32Settings() {
+
+        const ipInput =
+            $("#esp32IpInput");
+
+
+        const portInput =
+            $("#esp32PortInput");
+
+
+        const saveButton =
+            $("#saveESP32Button");
+
+
+        const testButton =
+            $("#testESP32Button");
+
+
+        const disconnectButton =
+            $("#disconnectESP32Button");
+
+
+        /*
+         * SAVE & CONNECT
+         */
+
+        saveButton?.addEventListener(
+            "click",
+            () => {
+
+                const result =
+                    saveESP32Settings(
+                        ipInput?.value,
+                        portInput?.value
                     );
 
-                    armGrid
-                        .querySelectorAll(
-                            ".action-button"
-                        )
-                        .forEach(button => {
 
-                            button.style.minWidth =
-                                "0";
+                if (!result.success) {
 
-                            button.style.minHeight =
-                                "0";
+                    setESP32Status(
+                        result.error,
+                        "error"
+                    );
 
-                            button.style.maxWidth =
-                                "100%";
 
-                            button.style.maxHeight =
-                                "100%";
+                    return;
 
-                            button.style.boxSizing =
-                                "border-box";
-                        });
                 }
+
+
+                updateESP32Address();
+
+
+                setESP32Status(
+                    "CONNECTING...",
+                    "testing"
+                );
+
+
+                disconnectESP32();
+
+
+                setTimeout(
+                    connectESP32,
+                    150
+                );
+
+            }
+        );
+
+
+        /*
+         * TEST CONNECTION
+         */
+
+        testButton?.addEventListener(
+            "click",
+            () => {
+
+                const result =
+                    saveESP32Settings(
+                        ipInput?.value,
+                        portInput?.value
+                    );
+
+
+                if (!result.success) {
+
+                    setESP32Status(
+                        result.error,
+                        "error"
+                    );
+
+
+                    return;
+
+                }
+
+
+                updateESP32Address();
+
+
+                setESP32Status(
+                    "TESTING...",
+                    "testing"
+                );
+
+
+                disconnectESP32();
+
+
+                setTimeout(
+                    connectESP32,
+                    150
+                );
+
+            }
+        );
+
+
+        /*
+         * DISCONNECT
+         */
+
+        disconnectButton?.addEventListener(
+            "click",
+            () => {
+
+                disconnectESP32();
+
+
+                setESP32Status(
+                    "OFFLINE",
+                    "offline"
+                );
+
+            }
+        );
+
+
+        /*
+         * ENTER KEY
+         */
+
+        ipInput?.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+
+                    event.preventDefault();
+
+                    saveButton?.click();
+
+                }
+
+            }
+        );
+
+
+        portInput?.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+
+                    event.preventDefault();
+
+                    saveButton?.click();
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       CONNECT ESP32
+       ===================================================== */
+
+    function connectESP32() {
+
+        const url =
+            getESP32URL();
+
+
+        if (!url) {
+
+            setESP32Status(
+                "ENTER ESP32 IP",
+                "offline"
+            );
+
+
+            return;
+
+        }
+
+
+        if (
+            ESP32.socket &&
+            (
+                ESP32.socket.readyState ===
+                WebSocket.OPEN ||
+
+                ESP32.socket.readyState ===
+                WebSocket.CONNECTING
+            )
+        ) {
+
+            return;
+
+        }
+
+
+        console.log(
+            "[RIK] Connecting to:",
+            url
+        );
+
+
+        setESP32Status(
+            "CONNECTING...",
+            "testing"
+        );
+
+
+        let socket;
+
+
+        try {
+
+            socket =
+                new WebSocket(
+                    url
+                );
+
+        } catch (error) {
+
+            console.error(
+                "[RIK] WebSocket error:",
+                error
+            );
+
+
+            setESP32Status(
+                "CONNECTION FAILED",
+                "error"
+            );
+
+
+            scheduleReconnect();
+
+
+            return;
+
+        }
+
+
+        ESP32.socket =
+            socket;
+
+
+        ESP32.connectionTimeout =
+            setTimeout(
+                () => {
+
+                    if (
+                        socket.readyState ===
+                        WebSocket.CONNECTING
+                    ) {
+
+                        socket.close();
+
+                    }
+
+                },
+                7000
+            );
+
+
+        socket.addEventListener(
+            "open",
+            () => {
+
+                clearTimeout(
+                    ESP32.connectionTimeout
+                );
+
+
+                ESP32.reconnectDelay =
+                    1000;
+
+
+                state.connected =
+                    true;
+
+
+                updateConnectionUI();
+
+
+                setESP32Status(
+                    "CONNECTED",
+                    "connected"
+                );
+
+
+                updateESP32Address();
+
+
+                console.log(
+                    "[RIK] ESP32 CONNECTED"
+                );
+
+
+                startHeartbeat();
+
+
+                sendPacket({
+
+                    type: "hello",
+
+                    client: "RIK",
+
+                    version: 1,
+
+                    timestamp:
+                        Date.now()
+
+                });
+
+            }
+        );
+
+
+        socket.addEventListener(
+            "message",
+            event => {
+
+                handleESP32Message(
+                    event.data
+                );
+
+            }
+        );
+
+
+        socket.addEventListener(
+            "close",
+            () => {
+
+                clearTimeout(
+                    ESP32.connectionTimeout
+                );
+
+
+                stopHeartbeat();
+
+
+                if (
+                    ESP32.socket ===
+                    socket
+                ) {
+
+                    ESP32.socket =
+                        null;
+
+                }
+
+
+                state.connected =
+                    false;
+
+
+                updateConnectionUI();
+
+
+                setESP32Status(
+                    "OFFLINE",
+                    "offline"
+                );
+
+
+                rejectPending();
+
+
+                scheduleReconnect();
+
+            }
+        );
+
+
+        socket.addEventListener(
+            "error",
+            error => {
+
+                console.error(
+                    "[RIK] ESP32 socket error:",
+                    error
+                );
+
+
+                state.connected =
+                    false;
+
+
+                updateConnectionUI();
+
+
+                setESP32Status(
+                    "CONNECTION ERROR",
+                    "error"
+                );
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       DISCONNECT
+       ===================================================== */
+
+    function disconnectESP32() {
+
+        if (
+            ESP32.reconnectTimer
+        ) {
+
+            clearTimeout(
+                ESP32.reconnectTimer
+            );
+
+
+            ESP32.reconnectTimer =
+                null;
+
+        }
+
+
+        stopHeartbeat();
+
+
+        if (
+            ESP32.socket
+        ) {
+
+            try {
+
+                ESP32.socket.close();
+
+            } catch (_) {}
+
+        }
+
+
+        ESP32.socket =
+            null;
+
+
+        state.connected =
+            false;
+
+
+        rejectPending();
+
+
+        updateConnectionUI();
+
+    }
+
+
+    /* =====================================================
+       RECONNECT
+       ===================================================== */
+
+    function scheduleReconnect() {
+
+        if (
+            ESP32.reconnectTimer
+        ) {
+
+            return;
+
+        }
+
+
+        if (
+            !getESP32URL()
+        ) {
+
+            return;
+
+        }
+
+
+        ESP32.reconnectTimer =
+            setTimeout(
+                () => {
+
+                    ESP32.reconnectTimer =
+                        null;
+
+
+                    connectESP32();
+
+
+                    ESP32.reconnectDelay =
+                        Math.min(
+                            ESP32.reconnectDelay * 2,
+                            ESP32.reconnectMax
+                        );
+
+                },
+                ESP32.reconnectDelay
+            );
+
+    }
+
+
+    /* =====================================================
+       HEARTBEAT
+       ===================================================== */
+
+    function startHeartbeat() {
+
+        stopHeartbeat();
+
+
+        ESP32.heartbeatTimer =
+            setInterval(
+                () => {
+
+                    if (
+                        !state.connected ||
+                        !ESP32.socket ||
+                        ESP32.socket.readyState !==
+                            WebSocket.OPEN
+                    ) {
+
+                        return;
+
+                    }
+
+
+                    sendPacket({
+
+                        type:
+                            "heartbeat",
+
+                        timestamp:
+                            Date.now()
+
+                    });
+
+                },
+                3000
+            );
+
+    }
+
+
+    function stopHeartbeat() {
+
+        if (
+            ESP32.heartbeatTimer
+        ) {
+
+            clearInterval(
+                ESP32.heartbeatTimer
+            );
+
+
+            ESP32.heartbeatTimer =
+                null;
+
+        }
+
+    }
+
+
+    /* =====================================================
+       SEND PACKET
+       ===================================================== */
+
+    function sendPacket(
+        packet
+    ) {
+
+        if (
+            !ESP32.socket ||
+            ESP32.socket.readyState !==
+                WebSocket.OPEN
+        ) {
+
+            return false;
+
+        }
+
+
+        try {
+
+            ESP32.socket.send(
+                JSON.stringify(
+                    packet
+                )
+            );
+
+
+            return true;
+
+        } catch (error) {
+
+            console.error(
+                "[RIK] Send failed:",
+                error
+            );
+
+
+            return false;
+
+        }
+
+    }
+
+
+    /* =====================================================
+       SEND ROBOT COMMAND
+       ===================================================== */
+
+    function sendCommand(
+        command
+    ) {
+
+        if (
+            !state.connected
+        ) {
+
+            console.warn(
+                "[RIK] Robot is offline."
+            );
+
+
+            return false;
+
+        }
+
+
+        const id =
+            ++ESP32.commandId;
+
+
+        const packet = {
+
+            type:
+                "command",
+
+            id,
+
+            command,
+
+            speed:
+                state.speed,
+
+            timestamp:
+                Date.now()
+
+        };
+
+
+        if (
+            !sendPacket(
+                packet
+            )
+        ) {
+
+            return false;
+
+        }
+
+
+        console.log(
+            "[RIK → ESP32]",
+            packet
+        );
+
+
+        const timeout =
+            setTimeout(
+                () => {
+
+                    ESP32.pending.delete(
+                        id
+                    );
+
+                },
+                2500
+            );
+
+
+        ESP32.pending.set(
+            id,
+            {
+                command,
+                timeout
+            }
+        );
+
+
+        return true;
+
+    }
+
+
+    /* =====================================================
+       HANDLE ESP32 MESSAGE
+       ===================================================== */
+
+    function handleESP32Message(
+        raw
+    ) {
+
+        let data;
+
+
+        try {
+
+            data =
+                JSON.parse(
+                    raw
+                );
+
+        } catch (_) {
+
+            console.warn(
+                "[RIK] Invalid ESP32 data:",
+                raw
+            );
+
+
+            return;
+
+        }
+
+
+        if (
+            data.type ===
+            "ack"
+        ) {
+
+            const pending =
+                ESP32.pending.get(
+                    Number(
+                        data.id
+                    )
+                );
+
+
+            if (pending) {
+
+                clearTimeout(
+                    pending.timeout
+                );
+
+
+                ESP32.pending.delete(
+                    Number(
+                        data.id
+                    )
+                );
+
             }
 
 
-            /* ---------------------------------------------
-               9. CENTER EVERYTHING
-               --------------------------------------------- */
+            return;
 
-            movementContent.style.alignItems =
-                "center";
-
-            movementContent.style.justifyContent =
-                "center";
+        }
 
 
-            /* ---------------------------------------------
-               10. DEVICE CLASS
-               --------------------------------------------- */
+        if (
+            data.type ===
+                "telemetry" ||
 
-            const isLandscape =
-                viewportWidth >
-                viewportHeight;
+            data.type ===
+                "status"
+        ) {
 
-            const isPhone =
-                Math.min(
-                    viewportWidth,
-                    viewportHeight
-                ) < 600;
-
-            root.classList.toggle(
-                "rik-landscape",
-                isLandscape
+            updateTelemetry(
+                data
             );
 
-            root.classList.toggle(
-                "rik-portrait",
-                !isLandscape
-            );
+        }
 
-            root.classList.toggle(
-                "rik-phone",
-                isPhone
-            );
-
-            root.classList.toggle(
-                "rik-tablet",
-                !isPhone &&
-                Math.min(
-                    viewportWidth,
-                    viewportHeight
-                ) < 1000
-            );
-        });
     }
 
 
     /* =====================================================
-       OBSERVE THE ACTUAL ELEMENTS
-       This is the important part.
+       TELEMETRY
        ===================================================== */
 
-    const resizeObserver =
-        new ResizeObserver(() => {
-            autoFitRIKControls();
-        });
+    function updateTelemetry(
+        data
+    ) {
+
+        if (
+            data.soil !==
+            undefined
+        ) {
+
+            state.soil =
+                data.soil;
+
+        }
 
 
-    function startAutoFitObserver() {
+        if (
+            data.air !==
+            undefined
+        ) {
 
-        const elements = [
-            "#app",
-            ".controls-area",
-            ".movement-panel",
-            ".movement-content",
-            ".movement-pad",
-            ".arm-claw-panel",
-            ".arm-claw-grid"
-        ];
+            state.air =
+                data.air;
 
-        elements.forEach(selector => {
+        }
 
-            const element =
-                document.querySelector(selector);
 
-            if (element) {
-                resizeObserver.observe(element);
+        const soil =
+            $("#islandSoilValue");
+
+
+        if (soil) {
+
+            soil.textContent =
+                `${state.soil}%`;
+
+        }
+
+
+        const air =
+            $("#islandAirValue");
+
+
+        if (air) {
+
+            air.textContent =
+                state.air;
+
+        }
+
+    }
+
+
+    /* =====================================================
+       PENDING COMMANDS
+       ===================================================== */
+
+    function rejectPending() {
+
+        ESP32.pending.forEach(
+            item => {
+
+                clearTimeout(
+                    item.timeout
+                );
+
             }
-        });
+        );
 
-        autoFitRIKControls();
+
+        ESP32.pending.clear();
+
     }
 
 
     /* =====================================================
-       SCREEN / BROWSER EVENTS
+       MOVEMENT
        ===================================================== */
 
-    window.addEventListener(
-        "resize",
-        autoFitRIKControls,
-        { passive: true }
-    );
+    function setDriveState(
+        command
+    ) {
 
-    window.addEventListener(
-        "orientationchange",
-        () => {
-            setTimeout(
-                autoFitRIKControls,
-                100
+        state.driveCommand =
+            command;
+
+
+        const status =
+            $("#driveState");
+
+
+        if (status) {
+
+            status.textContent =
+                command ||
+                "STOPPED";
+
+        }
+
+
+        $$(".rik-pearl-button")
+            .forEach(
+                button => {
+
+                    button.classList.toggle(
+                        "command-active",
+                        Boolean(
+                            command
+                        ) &&
+                        button.dataset.command ===
+                            command
+                    );
+
+                }
             );
 
-            setTimeout(
-                autoFitRIKControls,
-                500
+    }
+
+
+    function startDrive(
+        command
+    ) {
+
+        if (
+            !state.connected
+        ) {
+
+            return;
+
+        }
+
+
+        setDriveState(
+            command
+        );
+
+
+        sendCommand(
+            command
+        );
+
+    }
+
+
+    function stopDrive(
+        sendToESP = true
+    ) {
+
+        const wasMoving =
+            Boolean(
+                state.driveCommand
             );
-        },
-        { passive: true }
-    );
 
 
-    if (window.visualViewport) {
-
-        window.visualViewport.addEventListener(
-            "resize",
-            autoFitRIKControls,
-            { passive: true }
+        setDriveState(
+            null
         );
 
-        window.visualViewport.addEventListener(
-            "scroll",
-            autoFitRIKControls,
-            { passive: true }
-        );
+
+        if (
+            sendToESP &&
+            wasMoving &&
+            state.connected
+        ) {
+
+            sendCommand(
+                "STOP"
+            );
+
+        }
+
     }
 
 
     /* =====================================================
-       START AFTER DOM IS READY
+       MOVEMENT BUTTONS
        ===================================================== */
 
-    if (document.readyState === "loading") {
+    function setupMovementButtons() {
+
+        $$(".rik-pearl-button")
+            .forEach(
+                button => {
+
+                    const command =
+                        button.dataset.command;
+
+
+                    if (!command) {
+
+                        return;
+
+                    }
+
+
+                    let pressed =
+                        false;
+
+
+                    button.addEventListener(
+                        "pointerdown",
+                        event => {
+
+                            if (
+                                event.button !==
+                                    undefined &&
+                                event.button !==
+                                    0
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            event.preventDefault();
+
+
+                            if (
+                                pressed
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            pressed =
+                                true;
+
+
+                            button.classList.add(
+                                "pressed"
+                            );
+
+
+                            startDrive(
+                                command
+                            );
+
+                        }
+                    );
+
+
+                    button.addEventListener(
+                        "pointerup",
+                        event => {
+
+                            event.preventDefault();
+
+
+                            if (
+                                !pressed
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            pressed =
+                                false;
+
+
+                            button.classList.remove(
+                                "pressed"
+                            );
+
+
+                            stopDrive();
+
+                        }
+                    );
+
+
+                    button.addEventListener(
+                        "pointercancel",
+                        () => {
+
+                            pressed =
+                                false;
+
+
+                            button.classList.remove(
+                                "pressed"
+                            );
+
+
+                            stopDrive();
+
+                        }
+                    );
+
+                }
+            );
+
+    }
+
+
+    /* =====================================================
+       ARM / CLAW
+       ===================================================== */
+
+    function setupArmClaw() {
+
+        $$(".action-button")
+            .forEach(
+                button => {
+
+                    const command =
+                        button.dataset.command;
+
+
+                    if (!command) {
+
+                        return;
+
+                    }
+
+
+                    button.addEventListener(
+                        "click",
+                        () => {
+
+                            if (
+                                !state.connected
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            sendCommand(
+                                command
+                            );
+
+
+                            button.classList.add(
+                                "pressed"
+                            );
+
+
+                            setTimeout(
+                                () => {
+
+                                    button.classList.remove(
+                                        "pressed"
+                                    );
+
+                                },
+                                180
+                            );
+
+
+                            if (
+                                command ===
+                                "ARM_UP"
+                            ) {
+
+                                state.armState =
+                                    "ARM UP";
+
+                            }
+
+
+                            if (
+                                command ===
+                                "ARM_DOWN"
+                            ) {
+
+                                state.armState =
+                                    "ARM DOWN";
+
+                            }
+
+
+                            if (
+                                command ===
+                                "OPEN"
+                            ) {
+
+                                state.clawState =
+                                    "OPEN";
+
+                            }
+
+
+                            if (
+                                command ===
+                                "CLOSE"
+                            ) {
+
+                                state.clawState =
+                                    "CLOSED";
+
+                            }
+
+
+                            const arm =
+                                $("#armStatus");
+
+
+                            if (arm) {
+
+                                arm.textContent =
+                                    state.armState;
+
+                            }
+
+
+                            const claw =
+                                $("#clawStatus");
+
+
+                            if (claw) {
+
+                                claw.textContent =
+                                    state.clawState;
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+    }
+
+
+    /* =====================================================
+       SPEED
+       ===================================================== */
+
+    function setupSpeed() {
+
+        const slider =
+            $("#speedSlider");
+
+
+        const value =
+            $("#speedValue");
+
+
+        if (!slider) {
+
+            return;
+
+        }
+
+
+        function update() {
+
+            state.speed =
+                Number(
+                    slider.value
+                );
+
+
+            if (value) {
+
+                value.textContent =
+                    `${state.speed}%`;
+
+            }
+
+        }
+
+
+        slider.addEventListener(
+            "input",
+            update
+        );
+
+
+        update();
+
+    }
+
+
+    /* =====================================================
+       SETTINGS NAVIGATION
+       ===================================================== */
+
+    function setupSettingsNavigation() {
+
+        const settingsButton =
+            $("#settingsButton");
+
+
+        const settingsPage =
+            $("#settingsPage");
+
+
+        const controlPage =
+            $("#controlPage");
+
+
+        const backButton =
+            $("#settingsBackButton");
+
+
+        settingsButton?.addEventListener(
+            "click",
+            () => {
+
+                stopDrive();
+
+
+                if (controlPage) {
+
+                    controlPage.style.display =
+                        "none";
+
+                }
+
+
+                if (settingsPage) {
+
+                    settingsPage.style.display =
+                        "block";
+
+                }
+
+
+                /*
+                 * IMPORTANT:
+                 * Create the ESP32 card
+                 * when Settings is opened.
+                 */
+
+                createESP32SettingsCard();
+
+            }
+        );
+
+
+        backButton?.addEventListener(
+            "click",
+            () => {
+
+                if (settingsPage) {
+
+                    settingsPage.style.display =
+                        "none";
+
+                }
+
+
+                if (controlPage) {
+
+                    controlPage.style.display =
+                        "";
+
+                }
+
+            }
+        );
+
+
+        /*
+         * Create immediately too,
+         * so it exists even if Settings
+         * starts open.
+         */
+
+        createESP32SettingsCard();
+
+    }
+
+
+    /* =====================================================
+       KEYBOARD
+       ===================================================== */
+
+    function setupKeyboard() {
+
+        const keys = {
+
+            ArrowUp:
+                "FORWARD",
+
+            ArrowDown:
+                "BACKWARD",
+
+            ArrowLeft:
+                "LEFT",
+
+            ArrowRight:
+                "RIGHT"
+
+        };
+
+
+        document.addEventListener(
+            "keydown",
+            event => {
+
+                const command =
+                    keys[event.key];
+
+
+                if (!command) {
+
+                    return;
+
+                }
+
+
+                const active =
+                    document.activeElement;
+
+
+                if (
+                    active &&
+                    (
+                        active.tagName ===
+                            "INPUT" ||
+
+                        active.tagName ===
+                            "TEXTAREA"
+                    )
+                ) {
+
+                    return;
+
+                }
+
+
+                if (
+                    event.repeat
+                ) {
+
+                    return;
+
+                }
+
+
+                event.preventDefault();
+
+
+                startDrive(
+                    command
+                );
+
+            }
+        );
+
+
+        document.addEventListener(
+            "keyup",
+            event => {
+
+                if (
+                    keys[event.key]
+                ) {
+
+                    event.preventDefault();
+
+                    stopDrive();
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       SAFETY
+       ===================================================== */
+
+    function setupSafety() {
+
+        window.addEventListener(
+            "blur",
+            () => {
+
+                stopDrive();
+
+            }
+        );
+
+
+        document.addEventListener(
+            "visibilitychange",
+            () => {
+
+                if (
+                    document.hidden
+                ) {
+
+                    stopDrive();
+
+                }
+
+            }
+        );
+
+
+        document.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Escape"
+                ) {
+
+                    stopDrive();
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       BACKGROUND PERFORMANCE
+       ===================================================== */
+
+    function setupBackgroundPerformance() {
+
+        /*
+         * Pause expensive animated
+         * background work when the tab
+         * is not visible.
+         */
+
+        document.addEventListener(
+            "visibilitychange",
+            () => {
+
+                if (
+                    document.hidden
+                ) {
+
+                    document.body.classList.add(
+                        "rik-tab-hidden"
+                    );
+
+                } else {
+
+                    document.body.classList.remove(
+                        "rik-tab-hidden"
+                    );
+
+                }
+
+            }
+        );
+
+    }
+
+
+    /* =====================================================
+       INIT
+       ===================================================== */
+
+    function init() {
+
+        console.log(
+            "=============================="
+        );
+
+
+        console.log(
+            "RIK ROBOT IN KONTROL"
+        );
+
+
+        console.log(
+            "Initializing..."
+        );
+
+
+        console.log(
+            "=============================="
+        );
+
+
+        /*
+         * IMPORTANT:
+         * Build ESP32 Settings UI.
+         */
+
+        createESP32SettingsCard();
+
+
+        setupSettingsNavigation();
+
+
+        setupMovementButtons();
+
+
+        setupArmClaw();
+
+
+        setupSpeed();
+
+
+        setupKeyboard();
+
+
+        setupSafety();
+
+
+        setupBackgroundPerformance();
+
+
+        /*
+         * Initial connection state.
+         */
+
+        state.connected =
+            false;
+
+
+        updateConnectionUI();
+
+
+        /*
+         * Automatically connect
+         * to saved IP.
+         */
+
+        const settings =
+            getESP32Settings();
+
+
+        if (
+            settings.ip
+        ) {
+
+            console.log(
+                "[RIK] Saved ESP32:",
+                `${settings.ip}:${settings.port}`
+            );
+
+
+            connectESP32();
+
+        } else {
+
+            console.log(
+                "[RIK] No ESP32 IP configured."
+            );
+
+
+            setESP32Status(
+                "ENTER ESP32 IP",
+                "offline"
+            );
+
+        }
+
+
+        /*
+         * Public API.
+         */
+
+        window.RIK = {
+
+            state,
+
+            connectESP32,
+
+            disconnectESP32,
+
+            sendCommand,
+
+            stopDrive,
+
+            getESP32Settings,
+
+            saveESP32Settings,
+
+            getESP32URL
+
+        };
+
+
+        console.log(
+            "[RIK] READY"
+        );
+
+    }
+
+
+    /* =====================================================
+       START
+       ===================================================== */
+
+    if (
+        document.readyState ===
+        "loading"
+    ) {
 
         document.addEventListener(
             "DOMContentLoaded",
-            () => {
-                startAutoFitObserver();
-
-                setTimeout(
-                    autoFitRIKControls,
-                    250
-                );
-
-                setTimeout(
-                    autoFitRIKControls,
-                    1000
-                );
-            },
-            { once: true }
+            init,
+            {
+                once: true
+            }
         );
 
     } else {
 
-        startAutoFitObserver();
+        init();
 
-        setTimeout(
-            autoFitRIKControls,
-            250
-        );
     }
-
-
-    /*
-     * Expose it so the existing slider can force an
-     * immediate recalculation if necessary.
-     */
-
-    window.autoFitRIKControls =
-        autoFitRIKControls;
 
 })();

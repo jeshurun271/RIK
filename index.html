@@ -1,1826 +1,636 @@
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    >
-
-    <meta
-        name="theme-color"
-        content="#eee9e2"
-    >
-
-    <meta
-        name="apple-mobile-web-app-capable"
-        content="yes"
-    >
-
-    <meta
-        name="apple-mobile-web-app-status-bar-style"
-        content="default"
-    >
-
-    <meta
-        name="apple-mobile-web-app-title"
-        content="RIK"
-    >
-
-    <title>RIK — Robot In Kontrol</title>
-
-
-    <link
-        rel="manifest"
-        href="/manifest.json"
-    >
-
-
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
-
+<meta charset="UTF-8">
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+>
+<meta
+name="theme-color"
+content="#000000"
+>
+<meta
+name="apple-mobile-web-app-capable"
+content="yes"
+>
+<meta
+name="apple-mobile-web-app-status-bar-style"
+content="default"
+>
+<meta
+name="apple-mobile-web-app-title"
+content="RIK"
+>
+<title>RIK — Robot In Kontrol</title>
+<link
+rel="manifest"
+href="manifest.json"
+>
+<link
+rel="stylesheet"
+href="style.css"
+>
 </head>
-
-
 <body>
-
-
-<div id="app">
-
-
-    <!-- =====================================================
-         CONTROLLER TOP STATUS
-    ====================================================== -->
-
-    <header class="controller-topbar">
-
-
-        <!-- TIMER -->
-
-        <button
-            id="timerButton"
-            class="top-status-item timer-top-item"
-            type="button"
-            aria-label="Open timer"
-        >
-
-            <small>
-                TIMER
-            </small>
-
-            <strong id="timerDisplay">
-                00:00
-            </strong>
-
-        </button>
-
-
-
-        <!-- MODE -->
-
-        <div class="top-status-item">
-
-            <small>
-                MODE
-            </small>
-
-            <strong>
-                MANUAL
-            </strong>
-
-        </div>
-
-
-
-        <!-- CONNECTION -->
-
-        <div class="top-status-item connection-top">
-
-            <span class="connection-dot"></span>
-
-            <strong>
-                CONNECTED
-            </strong>
-
-            <small>
-                ESP32
-            </small>
-
-        </div>
-
-
-
-        <!-- BATTERY -->
-
-        <div class="top-status-item battery-top">
-
-            <strong>
-                12.4 V
-            </strong>
-
-            <small>
-                88%
-            </small>
-
-        </div>
-
-    </header>
-
-
-
-    <!-- =====================================================
-         SENSOR OUTPUT
-    ====================================================== -->
-
-    <section class="sensor-section">
-
-
-        <div class="section-heading">
-
-            <div class="section-title">
-                SENSOR OUTPUT
-            </div>
-
-            <span class="live-indicator">
-                ● LIVE
-            </span>
-
-        </div>
-
-
-
-        <div class="sensor-grid">
-
-
-            <!-- SOIL -->
-
-            <div class="sensor-card soil-card">
-
-                <div class="sensor-icon">
-
-                    <span class="icon-soil">
-                        ♧
-                    </span>
-
-                </div>
-
-
-                <div class="sensor-info">
-
-                    <span class="sensor-name">
-                        SOIL MOISTURE
-                    </span>
-
-                    <strong id="soilValue">
-                        --%
-                    </strong>
-
-                    <small id="soilStatus">
-                        Waiting for sensor
-                    </small>
-
-                </div>
-
-            </div>
-
-
-
-            <!-- MQ135 -->
-
-            <div class="sensor-card air-card">
-
-                <div class="sensor-icon">
-
-                    <span class="icon-air">
-                        ≋
-                    </span>
-
-                </div>
-
-
-                <div class="sensor-info">
-
-                    <span class="sensor-name">
-                        MQ135 AIR
-                    </span>
-
-                    <strong id="airValue">
-                        ---
-                    </strong>
-
-                    <small id="airStatus">
-                        Waiting for sensor
-                    </small>
-
-                </div>
-
-            </div>
-
-
-
-            <!-- WIFI -->
-
-            <div class="sensor-card signal-card">
-
-                <div class="sensor-icon">
-
-                    <span class="icon-signal">
-                        ▥
-                    </span>
-
-                </div>
-
-
-                <div class="sensor-info">
-
-                    <span class="sensor-name">
-                        WI-FI SIGNAL
-                    </span>
-
-                    <strong id="signalValue">
-                        ---
-                    </strong>
-
-                    <small id="signalStatus">
-                        Waiting for connection
-                    </small>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-
-
-    <!-- =====================================================
-         MAIN CONTROL AREA
-    ====================================================== -->
-
-    <main class="controls-area">
-
-
-        <!-- =================================================
-             MOVEMENT
-        ================================================== -->
-
-        <section class="control-panel movement-panel">
-
-
-            <div class="panel-header">
-
-                <div>
-
-                    <div class="section-title">
-                        MOVEMENT
-                    </div>
-
-
-                    <div class="drive-state">
-
-                        <span
-                            id="driveDot"
-                            class="drive-dot"
-                        ></span>
-
-                        <span id="driveState">
-                            STOPPED
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-
-            <div class="movement-content">
-
-
-                <div class="movement-pad">
-
-
-                    <!-- FORWARD -->
-
-                    <button
-                        class="control-button forward"
-                        data-command="FORWARD"
-                        type="button"
-                    >
-
-                        <span>
-                            ↑
-                        </span>
-
-                        <small>
-                            FORWARD
-                        </small>
-
-                    </button>
-
-
-
-                    <!-- LEFT -->
-
-                    <button
-                        class="control-button left"
-                        data-command="LEFT"
-                        type="button"
-                    >
-
-                        <span>
-                            ←
-                        </span>
-
-                        <small>
-                            LEFT
-                        </small>
-
-                    </button>
-
-
-
-                    <!-- CENTER -->
-
-                    <div class="movement-center">
-
-                        <div class="center-ring">
-                            •
-                        </div>
-
-                    </div>
-
-
-
-                    <!-- RIGHT -->
-
-                    <button
-                        class="control-button right"
-                        data-command="RIGHT"
-                        type="button"
-                    >
-
-                        <span>
-                            →
-                        </span>
-
-                        <small>
-                            RIGHT
-                        </small>
-
-                    </button>
-
-
-
-                    <!-- BACKWARD -->
-
-                    <button
-                        class="control-button backward"
-                        data-command="BACKWARD"
-                        type="button"
-                    >
-
-                        <span>
-                            ↓
-                        </span>
-
-                        <small>
-                            BACKWARD
-                        </small>
-
-                    </button>
-
-                </div>
-
-
-
-                <!-- SPEED -->
-
-                <div class="speed-control">
-
-
-                    <div class="speed-header">
-
-                        <span>
-                            DRIVE SPEED
-                        </span>
-
-                        <strong id="speedValue">
-                            65%
-                        </strong>
-
-                    </div>
-
-
-                    <input
-                        id="speedSlider"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value="65"
-                    >
-
-
-                    <div class="speed-labels">
-
-                        <span>
-                            PRECISION
-                        </span>
-
-                        <span>
-                            MAX
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- =================================================
-             ARM & CLAW
-        ================================================== -->
-
-        <section class="control-panel arm-claw-panel">
-
-
-            <div class="panel-header">
-
-                <div class="section-title">
-                    ARM &amp; CLAW
-                </div>
-
-
-                <div
-                    class="arm-state"
-                    id="armPosition"
-                >
-                    READY
-                </div>
-
-            </div>
-
-
-
-            <div class="arm-claw-grid">
-
-
-                <!-- ARM -->
-
-                <div class="sub-control">
-
-
-                    <div class="sub-title">
-                        ARM
-                    </div>
-
-
-
-                    <button
-                        class="action-button arm-up"
-                        data-command="ARM_UP"
-                        type="button"
-                    >
-
-                        <span>
-                            ↑
-                        </span>
-
-                        <div>
-
-                            <strong>
-                                ARM UP
-                            </strong>
-
-                        </div>
-
-                    </button>
-
-
-
-                    <button
-                        class="action-button arm-down"
-                        data-command="ARM_DOWN"
-                        type="button"
-                    >
-
-                        <span>
-                            ↓
-                        </span>
-
-                        <div>
-
-                            <strong>
-                                ARM DOWN
-                            </strong>
-
-                        </div>
-
-                    </button>
-
-                </div>
-
-
-
-                <!-- CLAW -->
-
-                <div class="sub-control">
-
-
-                    <div class="sub-title">
-                        CLAW
-                    </div>
-
-
-
-                    <button
-                        class="action-button claw-open"
-                        data-command="CLAW_OPEN"
-                        type="button"
-                    >
-
-                        <span>
-                            ⟨⟩
-                        </span>
-
-                        <div>
-
-                            <strong>
-                                OPEN
-                            </strong>
-
-                        </div>
-
-                    </button>
-
-
-
-                    <button
-                        class="action-button claw-close"
-                        data-command="CLAW_CLOSE"
-                        type="button"
-                    >
-
-                        <span>
-                            ⟨⟩
-                        </span>
-
-                        <div>
-
-                            <strong>
-                                CLOSE
-                            </strong>
-
-                        </div>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-        </section>
-
-    </main>
-
-
-
-    <!-- =====================================================
-         SETTINGS PAGE
-    ====================================================== -->
-
-    <section
-        id="settingsPage"
-        class="settings-page"
-        style="display: none;"
-    >
-
-
-        <div class="settings-container">
-
-
-            <!-- HEADER -->
-
-            <div class="settings-heading">
-
-
-                <span class="settings-eyebrow">
-                    RIK
-                </span>
-
-
-                <h1>
-                    Settings
-                </h1>
-
-
-                <p>
-                    Configure your RIK experience.
-                </p>
-
-            </div>
-
-
-
-            <!-- =================================================
-                 CONTROLS
-            ================================================== -->
-
-            <div class="settings-section">
-
-
-                <div class="settings-section-title">
-                    CONTROLS
-                </div>
-
-
-
-                <div class="setting-card">
-
-
-                    <div class="setting-header">
-
-                        <div>
-
-                            <strong>
-                                BUTTON SIZE
-                            </strong>
-
-                            <small>
-                                Adjust the size of control buttons
-                            </small>
-
-                        </div>
-
-
-                        <strong id="buttonSizeValue">
-                            100%
-                        </strong>
-
-                    </div>
-
-
-
-                    <input
-                        id="buttonSizeSlider"
-                        class="setting-slider"
-                        type="range"
-                        min="80"
-                        max="130"
-                        value="100"
-                        step="1"
-                    >
-
-
-                    <div class="slider-labels">
-
-                        <span>
-                            80%
-                        </span>
-
-                        <span>
-                            100%
-                        </span>
-
-                        <span>
-                            130%
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-
-            <!-- =================================================
-                 FEEDBACK
-            ================================================== -->
-
-            <div class="settings-section">
-
-
-                <div class="settings-section-title">
-                    FEEDBACK
-                </div>
-
-
-
-                <div class="setting-card setting-row">
-
-
-                    <div>
-
-                        <strong>
-                            HAPTIC FEEDBACK
-                        </strong>
-
-                        <small>
-                            Vibrate when controls are pressed
-                        </small>
-
-                    </div>
-
-
-
-                    <label class="setting-switch">
-
-                        <input
-                            id="hapticToggle"
-                            type="checkbox"
-                            checked
-                        >
-
-                        <span></span>
-
-                    </label>
-
-                </div>
-
-            </div>
-
-
-
-            <!-- =================================================
-                 APPEARANCE
-            ================================================== -->
-
-            <div class="settings-section">
-
-
-                <div class="settings-section-title">
-                    APPEARANCE
-                </div>
-
-
-
-                <div class="setting-card setting-row">
-
-
-                    <div>
-
-                        <strong>
-                            AMBIENT MOTION
-                        </strong>
-
-                        <small>
-                            Enable background animations
-                        </small>
-
-                    </div>
-
-
-
-                    <label class="setting-switch">
-
-                        <input
-                            id="ambientMotionToggle"
-                            type="checkbox"
-                            checked
-                        >
-
-                        <span></span>
-
-                    </label>
-
-                </div>
-
-            </div>
-
-
-
-            <!-- =================================================
-                 APP
-            ================================================== -->
-
-            <div class="settings-section">
-
-
-                <div class="settings-section-title">
-                    APP
-                </div>
-
-
-
-                <!-- APP INFO -->
-
-                <div class="setting-card app-setting-card">
-
-
-                    <div class="app-info">
-
-                        <strong>
-                            RIK
-                        </strong>
-
-                        <small>
-                            Robot In Kontrol
-                        </small>
-
-                    </div>
-
-
-                    <div class="settings-version">
-                        v1.0
-                    </div>
-
-                </div>
-
-
-
-                <!-- INSTALL RIK -->
-
-                <div
-                    class="setting-card install-card"
-                    id="installCard"
-                >
-
-
-                    <div class="setting-card-info">
-
-                        <strong>
-                            INSTALL RIK
-                        </strong>
-
-                        <small>
-                            Install RIK on this device
-                        </small>
-
-                    </div>
-
-
-
-                    <button
-                        type="button"
-                        class="install-app-button"
-                        id="installAppButton"
-                    >
-
-                        <span class="install-icon">
-                            ↓
-                        </span>
-
-                        <span>
-                            INSTALL
-                        </span>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-
-
-    <!-- =====================================================
-         RIK LAB — AI ROBOT BUILDING WORKSPACE
-    ====================================================== -->
-
-    <section
-        id="labPage"
-        class="lab-page"
-        aria-hidden="true"
-    >
-
-
-        <div class="lab-shell">
-
-
-            <!-- LAB HEADER -->
-
-            <header class="lab-header">
-
-
-                <div>
-
-                    <span class="lab-eyebrow">
-                        RIK
-                    </span>
-
-
-                    <h1>
-                        LAB
-                    </h1>
-
-
-                    <p>
-                        Build your robot with RIK.
-                    </p>
-
-                </div>
-
-
-
-                <div class="lab-progress-badge">
-
-                    <span>
-                        BUILD
-                    </span>
-
-                    <strong id="labStepCounter">
-                        01 / 14
-                    </strong>
-
-                </div>
-
-            </header>
-
-
-
-            <!-- LAB BODY -->
-
-            <div class="lab-body">
-
-
-                <!-- =============================================
-                     BUILD PROGRESS
-                ============================================== -->
-
-                <aside class="lab-sidebar">
-
-
-                    <div class="lab-sidebar-title">
-                        BUILD PROGRESS
-                    </div>
-
-
-
-                    <div
-                        class="lab-steps"
-                        id="labSteps"
-                    >
-
-
-                        <button
-                            class="lab-step active"
-                            data-step="1"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                01
-                            </span>
-
-                            <span class="lab-step-text">
-                                Hardware
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="2"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                02
-                            </span>
-
-                            <span class="lab-step-text">
-                                Chassis
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="3"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                03
-                            </span>
-
-                            <span class="lab-step-text">
-                                Drive Motors
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="4"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                04
-                            </span>
-
-                            <span class="lab-step-text">
-                                L298N #1
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="5"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                05
-                            </span>
-
-                            <span class="lab-step-text">
-                                Arm Motor
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="6"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                06
-                            </span>
-
-                            <span class="lab-step-text">
-                                Claw Motor
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="7"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                07
-                            </span>
-
-                            <span class="lab-step-text">
-                                L298N #2
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="8"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                08
-                            </span>
-
-                            <span class="lab-step-text">
-                                ESP32
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="9"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                09
-                            </span>
-
-                            <span class="lab-step-text">
-                                MQ-135
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="10"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                10
-                            </span>
-
-                            <span class="lab-step-text">
-                                Soil Sensor
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="11"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                11
-                            </span>
-
-                            <span class="lab-step-text">
-                                Power
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="12"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                12
-                            </span>
-
-                            <span class="lab-step-text">
-                                Firmware
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="13"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                13
-                            </span>
-
-                            <span class="lab-step-text">
-                                RIK App
-                            </span>
-
-                        </button>
-
-
-
-                        <button
-                            class="lab-step"
-                            data-step="14"
-                            type="button"
-                        >
-
-                            <span class="lab-step-number">
-                                14
-                            </span>
-
-                            <span class="lab-step-text">
-                                Final Test
-                            </span>
-
-                        </button>
-
-                    </div>
-
-
-
-                    <!-- HARDWARE PROFILE -->
-
-                    <div class="lab-hardware">
-
-
-                        <div class="lab-hardware-title">
-                            YOUR RIK
-                        </div>
-
-
-                        <div class="lab-hardware-list">
-
-                            <span>
-                                ✓ ESP32
-                            </span>
-
-                            <span>
-                                ✓ 2 × L298N
-                            </span>
-
-                            <span>
-                                ✓ 4 × Drive Motors
-                            </span>
-
-                            <span>
-                                ✓ 1 × Arm Motor
-                            </span>
-
-                            <span>
-                                ✓ 1 × Claw Motor
-                            </span>
-
-                            <span>
-                                ✓ MQ-135
-                            </span>
-
-                            <span>
-                                ✓ Soil Sensor
-                            </span>
-
-                            <span>
-                                ✓ ~11V Battery
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </aside>
-
-
-
-                <!-- =============================================
-                     MAIN LAB AREA
-                ============================================== -->
-
-                <main class="lab-main">
-
-
-                    <!-- RIK INTRO -->
-
-                    <section class="lab-ai-card">
-
-
-                        <div class="lab-ai-avatar">
-                            ₪
-                        </div>
-
-
-                        <div class="lab-ai-content">
-
-
-                            <span class="lab-ai-name">
-                                RIK AI
-                            </span>
-
-
-                            <h2 id="labStepTitle">
-                                Let's build your robot.
-                            </h2>
-
-
-                            <p id="labStepDescription">
-                                I'll guide you through the complete
-                                build step by step. You can ask me
-                                questions at any time.
-                            </p>
-
-                        </div>
-
-                    </section>
-
-
-
-                    <!-- CURRENT STEP -->
-
-                    <section class="lab-current-step">
-
-
-                        <div class="lab-current-label">
-                            CURRENT STEP
-                        </div>
-
-
-                        <h2 id="labCurrentTitle">
-                            Identify your hardware
-                        </h2>
-
-
-                        <p id="labCurrentDescription">
-                            Before we start wiring anything,
-                            make sure you have all the required
-                            components ready.
-                        </p>
-
-
-
-                        <!-- HARDWARE CHECK -->
-
-                        <div
-                            class="lab-hardware-check"
-                            id="labHardwareCheck"
-                        >
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                ESP32
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                2 × L298N
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                4 × Drive Motors
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                Arm Motor
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                Claw Motor
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                MQ-135
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                Capacitive Soil Sensor
-
-                            </div>
-
-
-
-                            <div class="lab-check-item">
-
-                                <span>
-                                    ✓
-                                </span>
-
-                                ~11V Battery
-
-                            </div>
-
-                        </div>
-
-
-
-                        <!-- STEP TIP -->
-
-                        <div class="lab-tip">
-
-
-                            <span class="lab-tip-icon">
-                                ✦
-                            </span>
-
-
-                            <div>
-
-                                <strong>
-                                    RIK TIP
-                                </strong>
-
-
-                                <p id="labTip">
-                                    Keep your wiring organized.
-                                    We will verify each connection
-                                    before moving forward.
-                                </p>
-
-                            </div>
-
-                        </div>
-
-
-
-                        <!-- STEP ACTIONS -->
-
-                        <div class="lab-step-actions">
-
-
-                            <button
-                                id="labPrevious"
-                                class="lab-action secondary"
-                                type="button"
-                            >
-                                ← PREVIOUS
-                            </button>
-
-
-                            <button
-                                id="labComplete"
-                                class="lab-action primary"
-                                type="button"
-                            >
-                                I'VE DONE THIS →
-                            </button>
-
-                        </div>
-
-                    </section>
-
-
-
-                    <!-- =========================================
-                         ASK RIK
-                    ========================================== -->
-
-                    <section class="lab-chat">
-
-
-                        <div class="lab-chat-header">
-
-
-                            <div>
-
-                                <strong>
-                                    ASK RIK
-                                </strong>
-
-
-                                <small>
-                                    Questions about your build?
-                                </small>
-
-                            </div>
-
-
-                            <span class="lab-online">
-                                ● READY
-                            </span>
-
-                        </div>
-
-
-
-                        <div
-                            id="labChatMessages"
-                            class="lab-chat-messages"
-                        >
-
-
-                            <div class="lab-message rik">
-
-
-                                <div class="lab-message-avatar">
-                                    🤖
-                                </div>
-
-
-                                <div class="lab-message-bubble">
-                                    Ask me anything about the
-                                    current build step.
-                                </div>
-
-                            </div>
-
-                        </div>
-
-
-
-                        <form
-                            id="labChatForm"
-                            class="lab-chat-input"
-                        >
-
-
-                            <input
-                                id="labChatInput"
-                                type="text"
-                                autocomplete="off"
-                                placeholder="Ask RIK anything..."
-                            >
-
-
-                            <button
-                                type="submit"
-                                aria-label="Send message"
-                            >
-                                ↑
-                            </button>
-
-                        </form>
-
-                    </section>
-
-                </main>
-
-            </div>
-
-        </div>
-
-    </section>
-
-
-
-    <!-- =====================================================
-         TIMER MODAL
-    ====================================================== -->
-
-    <div
-        id="timerOverlay"
-        class="timer-overlay"
-    >
-
-
-        <div class="timer-modal">
-
-
-            <!-- CLOSE -->
-
-            <button
-                id="closeTimer"
-                class="timer-close"
-                type="button"
-                aria-label="Close timer"
-            >
-                ×
-            </button>
-
-
-
-            <div class="timer-title">
-                TIMER
-            </div>
-
-
-
-            <div
-                id="timerBigDisplay"
-                class="timer-big-display"
-            >
-                00:00
-            </div>
-
-
-
-            <!-- INPUTS -->
-
-            <div class="timer-inputs">
-
-
-                <div>
-
-
-                    <label for="timerMinutes">
-                        MINUTES
-                    </label>
-
-
-                    <input
-                        id="timerMinutes"
-                        type="number"
-                        min="0"
-                        max="59"
-                        value="0"
-                        inputmode="numeric"
-                    >
-
-                </div>
-
-
-
-                <span>
-                    :
-                </span>
-
-
-
-                <div>
-
-
-                    <label for="timerSeconds">
-                        SECONDS
-                    </label>
-
-
-                    <input
-                        id="timerSeconds"
-                        type="number"
-                        min="0"
-                        max="59"
-                        value="30"
-                        inputmode="numeric"
-                    >
-
-                </div>
-
-            </div>
-
-
-
-            <!-- ACTIONS -->
-
-            <div class="timer-actions">
-
-
-                <button
-                    id="startTimer"
-                    class="timer-start"
-                    type="button"
-                >
-                    START
-                </button>
-
-
-                <button
-                    id="resetTimer"
-                    class="timer-reset"
-                    type="button"
-                >
-                    RESET
-                </button>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-
-    <!-- =====================================================
-         NAVIGATION REVEAL ZONE
-    ====================================================== -->
-
-    <div
-        id="navRevealZone"
-        class="rik-nav-reveal-zone"
-        tabindex="0"
-        aria-hidden="true"
-    ></div>
-
-
-
-    <!-- =====================================================
-         AUTO HIDING NAVIGATION
-    ====================================================== -->
-
-    <nav
-        id="rikNavigation"
-        class="rik-nav"
-        aria-label="Main navigation"
-    >
-
-
-        <!-- CONTROL -->
-
-        <button
-            class="nav-item active"
-            data-page="control"
-            type="button"
-            aria-label="Control"
-        >
-
-            <span class="nav-icon">
-                ◉
-            </span>
-
-
-            <span class="nav-label">
-                CONTROL
-            </span>
-
-        </button>
-
-
-
-        <!-- DEMO -->
-
-        <button
-            class="nav-item"
-            data-page="demo"
-            type="button"
-            aria-label="Demo"
-        >
-
-            <span class="nav-icon">
-                ▶
-            </span>
-
-
-            <span class="nav-label">
-                DEMO
-            </span>
-
-        </button>
-
-
-
-        <!-- SETTINGS -->
-
-        <button
-            class="nav-item"
-            data-page="settings"
-            type="button"
-            aria-label="Settings"
-        >
-
-            <span class="nav-icon">
-                ⚙
-            </span>
-
-
-            <span class="nav-label">
-                SETTINGS
-            </span>
-
-        </button>
-
-    </nav>
-
+<!-- Single full-screen 21st.dev-style floating paths backdrop -->
+<div class="floating-paths" aria-hidden="true">
+<svg
+id="floatingPathsSvg"
+class="floating-paths-svg"
+viewBox="0 0 1440 900"
+preserveAspectRatio="none"
+fill="none"
+></svg>
 </div>
-
-
-
+<div id="app">
 <!-- =====================================================
-     APP JAVASCRIPT
+CONTROL PAGE
 ====================================================== -->
-
+<section
+id="controlPage"
+class="control-page"
+>
+<!-- =================================================
+HEADER
+================================================== -->
+<header class="rik-header">
+<!-- BRAND -->
+<div class="brand-lockup">
+<div class="brand-mark">
+RIK
+</div>
+<div class="brand-subtitle">
+ROBOT IN KONTROL
+</div>
+</div>
+<!-- =================================================
+DYNAMIC ISLAND
+================================================== -->
+<div
+class="dynamic-island"
+id="dynamicIsland"
+>
+<!-- SOIL -->
+<div
+class="island-reading island-soil"
+>
+<span class="island-label">
+SOIL MOISTURE
+</span>
+<strong id="islandSoilValue">
+--%
+</strong>
+<span
+class="island-wave wave-green"
+></span>
+</div>
+<!-- TIMER -->
+<button
+id="timerButton"
+class="island-timer"
+type="button"
+aria-label="Open timer"
+>
+<span class="island-timer-label">
+TIMER
+</span>
+<strong id="timerDisplay">
+00:00
+</strong>
+</button>
+<!-- AIR -->
+<div
+class="island-reading island-air"
+>
+<span class="island-label">
+AIR QUALITY
+</span>
+<strong id="islandAirValue">
+---
+<small>AQI</small>
+</strong>
+<span
+class="island-wave wave-blue"
+></span>
+</div>
+</div>
+<!-- =================================================
+HEADER ACTIONS
+================================================== -->
+<div class="header-actions">
+<!-- CONNECTION -->
+<div
+class="connection-summary"
+id="connectionSummary"
+>
+<span
+class="connection-dot"
+></span>
+<div>
+<strong
+id="connectionText"
+>
+CONNECTED
+</strong>
+<small>
+ESP32
+</small>
+</div>
+</div>
+<!-- SETTINGS -->
+<button
+id="settingsButton"
+class="settings-button"
+type="button"
+aria-label="Open Settings"
+>
+<span aria-hidden="true">n</span>
+</button>
+</div>
+</header>
+<!-- =====================================================
+MAIN CONTROL AREA
+====================================================== -->
+<main class="controls-area">
+<!-- =================================================
+MOVEMENT
+================================================== -->
+<section
+class="control-panel movement-panel"
+>
+<!-- PANEL HEADER -->
+<div class="panel-header">
+<div>
+<div class="section-title">
+MOVEMENT
+</div>
+<div class="drive-state">
+<span
+id="driveDot"
+class="drive-dot"
+></span>
+<span id="driveState">
+STOPPED
+</span>
+</div>
+</div>
+</div>
+<!-- MOVEMENT CONTENT -->
+<div class="movement-content">
+<!-- DIRECTION PAD -->
+<div class="movement-pad">
+<button class="rik-pearl-button pearl-button forward"
+data-command="FORWARD"
+type="button"
+aria-label="Move forward">
+<div class="rik-pearl-content">
+<span class="rik-pearl-icon">
+↑</span>
+<span class="rik-pearl-label">FORWARD</span>
+</div>
+</button>
+<button class="rik-pearl-button pearl-button left"
+data-command="LEFT"
+type="button"
+aria-label="Move left">
+<div class="rik-pearl-content">
+<span class="rik-pearl-icon">
+←</span>
+<span class="rik-pearl-label">LEFT</span>
+</div>
+</button>
+<div class="movement-center" aria-hidden="true">
+<div class="center-ring"><span></span></div>
+</div>
+<button class="rik-pearl-button pearl-button right"
+data-command="RIGHT"
+type="button"
+aria-label="Move right">
+<div class="rik-pearl-content">
+<span class="rik-pearl-icon">
+→</span>
+<span class="rik-pearl-label">RIGHT</span>
+</div>
+</button>
+<button class="rik-pearl-button pearl-button backward"
+data-command="BACKWARD"
+type="button"
+aria-label="Move backward">
+<div class="rik-pearl-content">
+<span class="rik-pearl-icon">
+↓</span>
+<span class="rik-pearl-label">BACKWARD</span>
+</div>
+</button>
+</div>
+<!-- SPEED -->
+<div class="speed-control">
+<div class="speed-header">
+<span>DRIVE SPEED</span>
+<strong id="speedValue">65%</strong>
+</div>
+<input id="speedSlider"
+type="range"
+min="0"
+max="100"
+value="65"
+step="1"
+aria-label="Drive speed">
+<div class="speed-labels">
+<span>PRECISION</span>
+<span>MAX</span>
+</div>
+</div>
+</div>
+</section>
+<!-- =================================================
+ARM & CLAW
+================================================== -->
+<section
+class="control-panel arm-claw-panel"
+>
+<!-- HEADER -->
+<div class="panel-header">
+<div class="section-title">
+ARM &amp; CLAW
+</div>
+<div
+class="arm-state"
+id="armPosition"
+>
+READY
+</div>
+</div>
+<!-- ARM + CLAW -->
+<div class="arm-claw-grid">
+<!-- =================================================
+ARM
+================================================== -->
+<div class="sub-control">
+<div class="sub-title">
+ARM
+</div>
+<!-- ARM UP -->
+<button
+class="action-button pearl-button arm-up"
+data-command="ARM_UP"
+type="button"
+aria-label="Move arm up"
+>
+<span>
+↑
+</span>
+<div>
+<strong>
+ARM UP
+</strong>
+</div>
+</button>
+<!-- ARM DOWN -->
+<button
+class="action-button pearl-button arm-down"
+data-command="ARM_DOWN"
+type="button"
+aria-label="Move arm down"
+>
+<span>
+↓
+</span>
+<div>
+<strong>
+ARM DOWN
+</strong>
+</div>
+</button>
+</div>
+<!-- =================================================
+CLAW
+================================================== -->
+<div class="sub-control">
+<div class="sub-title">
+CLAW
+</div>
+<!-- OPEN -->
+<button
+class="action-button pearl-button claw-open"
+data-command="CLAW_OPEN"
+type="button"
+aria-label="Open claw"
+>
+<span>
+nn
+</span>
+<div>
+<strong>
+OPEN
+</strong>
+</div>
+</button>
+<!-- CLOSE -->
+<button
+class="action-button pearl-button claw-close"
+data-command="CLAW_CLOSE"
+type="button"
+aria-label="Close claw"
+>
+<span>
+nn
+</span>
+<div>
+<strong>
+CLOSE
+</strong>
+</div>
+</button>
+</div>
+</div>
+</section>
+</main>
+</section>
+<!-- =====================================================
+SETTINGS PAGE
+====================================================== -->
+<section
+id="settingsPage"
+class="settings-page"
+style="display: none;"
+>
+<div class="settings-container">
+<!-- =================================================
+SETTINGS HEADER
+================================================== -->
+<div class="settings-heading">
+<span class="settings-eyebrow">
+RIK
+</span>
+<h1>
+Settings
+</h1>
+<p>
+Configure your RIK experience.
+</p>
+</div>
+<!-- =================================================
+CONTROLS
+================================================== -->
+<div class="settings-section">
+<div class="settings-section-title">
+CONTROLS
+</div>
+<!-- BUTTON SIZE -->
+<div class="setting-card">
+<div class="setting-header">
+<div>
+<strong>
+BUTTON SIZE
+</strong>
+<small>
+Adjust the size of control buttons
+</small>
+</div>
+<strong
+id="buttonSizeValue"
+>
+100%
+</strong>
+</div>
+<input
+id="buttonSizeSlider"
+class="setting-slider"
+type="range"
+min="80"
+max="130"
+value="100"
+step="1"
+aria-label="Button size"
+>
+<div class="slider-labels">
+<span>
+SMALL
+</span>
+<span>
+LARGE
+</span>
+</div>
+</div>
+</div>
+<!-- =================================================
+INTERFACE
+================================================== -->
+<div class="settings-section">
+<div class="settings-section-title">
+INTERFACE
+</div>
+<!-- DYNAMIC ISLAND SIZE -->
+<div class="setting-card">
+<div class="setting-header">
+<div>
+<strong>
+DYNAMIC ISLAND SIZE
+</strong>
+<small>
+Adjust the size of the live sensor island
+</small>
+</div>
+<strong
+id="islandSizeValue"
+>
+82%
+</strong>
+</div>
+<input
+id="islandSizeSlider"
+class="setting-slider"
+type="range"
+min="70"
+max="100"
+value="82"
+step="1"
+aria-label="Dynamic Island size"
+>
+<div class="slider-labels">
+<span>
+COMPACT
+</span>
+<span>
+LARGE
+</span>
+</div>
+</div>
+</div>
+<!-- =================================================
+ROBOT
+================================================== -->
+<div class="settings-section">
+<div class="settings-section-title">
+ROBOT
+</div>
+<div class="setting-card">
+<div class="setting-header">
+<div>
+<strong>
+ROBOT STATUS
+</strong>
+<small>
+Current controller connection
+</small>
+</div>
+<strong
+id="settingsConnectionStatus"
+>
+CONNECTED
+</strong>
+</div>
+<div class="settings-status-row">
+<span
+class="connection-dot"
+></span>
+<div>
+<strong>
+ESP32
+</strong>
+<small>
+Robot controller
+</small>
+</div>
+</div>
+</div>
+</div>
+<!-- =================================================
+ABOUT
+================================================== -->
+<div class="settings-section">
+<div class="settings-section-title">
+ABOUT
+</div>
+<div class="setting-card about-card">
+<div>
+<strong>
+RIK
+</strong>
+<small>
+Robot In Kontrol
+</small>
+</div>
+<div>
+<strong>
+VERSION
+</strong>
+<small>
+1.0
+</small>
+</div>
+</div>
+</div>
+<!-- =================================================
+BACK BUTTON
+================================================== -->
+<button
+id="settingsBackButton"
+class="settings-back-button"
+type="button"
+>
+<span>
+←
+</span>
+BACK TO CONTROLLER
+</button>
+</div>
+</section>
+<!-- =====================================================
+TIMER OVERLAY
+====================================================== -->
+<div
+id="timerOverlay"
+class="timer-overlay"
+aria-hidden="true"
+>
+<div
+class="timer-modal"
+role="dialog"
+aria-modal="true"
+aria-labelledby="timerTitle"
+>
+<!-- CLOSE -->
+<button
+id="closeTimer"
+class="timer-close"
+type="button"
+aria-label="Close timer"
+>
+×
+</button>
+<!-- TITLE -->
+<div
+id="timerTitle"
+class="timer-title"
+>
+OPERATION TIMER
+</div>
+<!-- BIG DISPLAY -->
+<div
+id="timerBigDisplay"
+class="timer-big-display"
+>
+00:00
+</div>
+<!-- INPUTS -->
+<div class="timer-inputs">
+<div>
+<label for="minutesInput">
+MINUTES
+</label>
+<input
+id="minutesInput"
+type="number"
+min="0"
+max="59"
+value="0"
+inputmode="numeric"
+>
+</div>
+<span>
+:
+</span>
+<div>
+<label for="secondsInput">
+SECONDS
+</label>
+<input
+id="secondsInput"
+type="number"
+min="0"
+max="59"
+value="30"
+inputmode="numeric"
+>
+</div>
+</div>
+<!-- ACTIONS -->
+<div class="timer-actions">
+<button
+id="startTimer"
+class="timer-start"
+type="button"
+>
+START TIMER
+</button>
+<button
+id="resetTimer"
+class="timer-reset"
+type="button"
+>
+RESET
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- =====================================================
+JAVASCRIPT
+====================================================== -->
 <script src="app.js"></script>
-
-
 </body>
-
 </html>
