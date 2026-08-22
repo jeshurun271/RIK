@@ -1,218 +1,276 @@
 /* =========================================================
    RIK — ROBOT IN KONTROL
    FULL APP.JS
-   ESP32 IP CONFIGURATION
+   ---------------------------------------------------------
+   Includes:
+   - Animated bending background lines
+   - Performance-friendly SVG animation
+   - Pearl-style buttons
+   - Movement controls
+   - Arm & claw controls
+   - Speed control
+   - Timer
+   - ESP32 IP settings
+   - WebSocket communication
+   - Reconnection
+   - Telemetry
+   - Keyboard controls
+   - Safety stop
    ========================================================= */
 
-(() => {
-    "use strict";
-
-    /* =====================================================
-       STORAGE
-       ===================================================== */
-
-    const ESP32_IP_KEY = "rik_esp32_ip";
-    const ESP32_PORT_KEY = "rik_esp32_port";
-
-    const DEFAULT_PORT = "81";
+"use strict";
 
 
-    /* =====================================================
-       ESP32 CONFIG
-       ===================================================== */
+/* =========================================================
+   GLOBAL STATE
+   ========================================================= */
 
-    const ESP32 = {
-        socket: null,
-        reconnectTimer: null,
-        heartbeatTimer: null,
-        reconnectDelay: 1000,
-        reconnectMax: 10000,
-        connectionTimeout: null,
-        commandId: 0,
-        pending: new Map()
+const RIK = {
+
+    connected: false,
+
+    socket: null,
+
+    reconnectTimer: null,
+
+    heartbeatTimer: null,
+
+    reconnectDelay: 1500,
+
+    maxReconnectDelay: 10000,
+
+    speed: 65,
+
+    driveCommand: null,
+
+    armState: "READY",
+
+    clawState: "READY",
+
+    timerSeconds: 0,
+
+    timerInterval: null,
+
+    commandId: 0,
+
+    pageHidden: false,
+
+    backgroundAnimation: true
+
+};
+
+
+/* =========================================================
+   STORAGE
+   ========================================================= */
+
+const STORAGE = {
+
+    ip: "rik_esp32_ip",
+
+    port: "rik_esp32_port"
+
+};
+
+
+const DEFAULT_ESP32_PORT = 81;
+
+
+/* =========================================================
+   DOM HELPERS
+   ========================================================= */
+
+function $(selector, parent = document) {
+
+    return parent.querySelector(selector);
+
+}
+
+
+function $$(selector, parent = document) {
+
+    return Array.from(
+        parent.querySelectorAll(selector)
+    );
+
+}
+
+
+/* =========================================================
+   ESP32 SETTINGS
+   ========================================================= */
+
+function getESP32Settings() {
+
+    return {
+
+        ip:
+            localStorage.getItem(
+                STORAGE.ip
+            ) || "",
+
+        port:
+            localStorage.getItem(
+                STORAGE.port
+            ) || String(
+                DEFAULT_ESP32_PORT
+            )
+
     };
 
-
-    /* =====================================================
-       APP STATE
-       ===================================================== */
-
-    const state = {
-        connected: false,
-
-        speed: 65,
-
-        driveCommand: null,
-
-        armState: "READY",
-
-        clawState: "READY",
-
-        soil: "--",
-
-        air: "--",
-
-        timer: 0,
-
-        timerRunning: false,
-
-        timerInterval: null
-    };
+}
 
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+function saveESP32Settings(ip, port) {
 
-    const $ = (selector, root = document) =>
-        root.querySelector(selector);
+    ip =
+        String(ip || "")
+            .trim();
+
+    port =
+        String(
+            port ||
+            DEFAULT_ESP32_PORT
+        ).trim();
 
 
-    const $$ = (selector, root = document) =>
-        Array.from(root.querySelectorAll(selector));
+    if (!ip) {
 
-
-    /* =====================================================
-       ESP32 SETTINGS
-       ===================================================== */
-
-    function getESP32Settings() {
-
-        return {
-            ip:
-                localStorage.getItem(
-                    ESP32_IP_KEY
-                ) || "",
-
-            port:
-                localStorage.getItem(
-                    ESP32_PORT_KEY
-                ) || DEFAULT_PORT
-        };
+        return false;
 
     }
 
 
-    function saveESP32Settings(ip, port) {
-
-        ip =
-            String(ip || "")
-                .trim();
-
-        port =
-            String(port || DEFAULT_PORT)
-                .trim();
+    localStorage.setItem(
+        STORAGE.ip,
+        ip
+    );
 
 
-        if (!ip) {
-
-            return {
-                success: false,
-                error: "PLEASE ENTER ESP32 IP ADDRESS"
-            };
-
-        }
+    localStorage.setItem(
+        STORAGE.port,
+        port
+    );
 
 
-        if (!/^[0-9a-fA-F:.]+$/.test(ip)) {
+    return true;
 
-            return {
-                success: false,
-                error: "INVALID IP ADDRESS"
-            };
-
-        }
+}
 
 
-        const portNumber =
-            Number(port);
+function getESP32URL() {
+
+    const settings =
+        getESP32Settings();
 
 
-        if (
-            !Number.isInteger(portNumber) ||
-            portNumber < 1 ||
-            portNumber > 65535
-        ) {
+    if (!settings.ip) {
 
-            return {
-                success: false,
-                error: "INVALID PORT"
-            };
-
-        }
-
-
-        localStorage.setItem(
-            ESP32_IP_KEY,
-            ip
-        );
-
-
-        localStorage.setItem(
-            ESP32_PORT_KEY,
-            String(portNumber)
-        );
-
-
-        return {
-            success: true
-        };
+        return null;
 
     }
 
 
-    function getESP32URL() {
+    return (
+        "ws://" +
+        settings.ip +
+        ":" +
+        settings.port
+    );
 
-        const settings =
-            getESP32Settings();
-
-
-        if (!settings.ip) {
-
-            return null;
-
-        }
+}
 
 
-        return (
-            "ws://" +
-            settings.ip +
-            ":" +
-            settings.port
-        );
+/* =========================================================
+   CONNECTION STATUS UI
+   ========================================================= */
 
-    }
+function updateConnectionUI() {
 
-
-    /* =====================================================
-       CONNECTION STATUS
-       ===================================================== */
-
-    function updateConnectionUI() {
-
-        const connected =
-            state.connected;
+    const connected =
+        RIK.connected;
 
 
-        const text =
-            $("#connectionText");
+    const statusElements = [
+
+        $("#connectionText"),
+
+        $("#connectionStatus"),
+
+        $("#robotStatus")
+
+    ];
 
 
-        if (text) {
+    statusElements.forEach(
+        element => {
 
-            text.textContent =
+            if (!element) {
+
+                return;
+
+            }
+
+
+            if (
+                element.id ===
+                "robotStatus"
+            ) {
+
+                element.textContent =
+                    connected
+                        ? "CONNECTED"
+                        : "OFFLINE";
+
+            } else {
+
+                element.textContent =
+                    connected
+                        ? "CONNECTED"
+                        : "OFFLINE";
+
+            }
+
+
+            element.classList.toggle(
+                "connected",
                 connected
-                    ? "CONNECTED"
-                    : "OFFLINE";
+            );
+
+
+            element.classList.toggle(
+                "offline",
+                !connected
+            );
 
         }
+    );
 
 
-        const dot =
-            $("#connectionDot");
+    const dots = [
+
+        $("#connectionDot"),
+
+        $("#driveDot")
+
+    ];
 
 
-        if (dot) {
+    dots.forEach(
+        dot => {
+
+            if (!dot) {
+
+                return;
+
+            }
+
+
+            dot.classList.toggle(
+                "connected",
+                connected
+            );
+
 
             dot.classList.toggle(
                 "offline",
@@ -220,1328 +278,1316 @@
             );
 
         }
+    );
 
 
-        const status =
-            $("#esp32SettingsStatus");
+    /*
+     * Safety:
+     * If ESP32 disconnects, stop movement.
+     */
+
+    if (!connected) {
+
+        stopDrive(
+            false
+        );
+
+    }
+
+}
 
 
-        if (status) {
+/* =========================================================
+   ESP32 SETTINGS UI
+   ---------------------------------------------------------
+   Creates the IP input automatically.
+   ========================================================= */
 
-            if (connected) {
+function createESP32Settings() {
 
-                status.textContent =
-                    "CONNECTED";
+    if (
+        $("#esp32ConnectionCard")
+    ) {
 
-                status.className =
-                    "esp32-status connected";
+        loadESP32Settings();
 
-            } else {
-
-                const settings =
-                    getESP32Settings();
-
-
-                status.textContent =
-                    settings.ip
-                        ? "OFFLINE"
-                        : "ENTER ESP32 IP";
-
-                status.className =
-                    "esp32-status offline";
-
-            }
-
-        }
-
-
-        const robotStatus =
-            $("#robotStatus");
-
-
-        if (robotStatus) {
-
-            robotStatus.textContent =
-                connected
-                    ? "CONNECTED"
-                    : "OFFLINE";
-
-        }
-
-
-        /*
-         * Safety:
-         * stop movement immediately when connection disappears.
-         */
-
-        if (!connected) {
-
-            stopDrive(
-                false
-            );
-
-        }
+        return;
 
     }
 
 
-    /* =====================================================
-       CREATE ESP32 SETTINGS CARD
-       ===================================================== */
-
-    function createESP32SettingsCard() {
-
-        /*
-         * If it already exists,
-         * don't create another one.
-         */
-
-        if (
-            document.querySelector(
-                "#esp32ConnectionCard"
-            )
-        ) {
-
-            return;
-        }
+    const settingsPage =
+        $(
+            "#settingsPage"
+        );
 
 
-        const settingsPage =
-            document.querySelector(
-                "#settingsPage"
+    if (!settingsPage) {
+
+        console.warn(
+            "RIK: #settingsPage not found."
+        );
+
+        return;
+
+    }
+
+
+    /*
+     * CSS for dynamically-created settings card.
+     */
+
+    if (
+        !$("#rik-esp32-settings-style")
+    ) {
+
+        const style =
+            document.createElement(
+                "style"
             );
 
 
-        if (!settingsPage) {
-
-            console.warn(
-                "[RIK] #settingsPage not found."
-            );
-
-            return;
-
-        }
+        style.id =
+            "rik-esp32-settings-style";
 
 
-        /*
-         * -------------------------------------------------
-         * Create CSS
-         * -------------------------------------------------
-         */
+        style.textContent = `
 
-        if (
-            !document.querySelector(
-                "#rik-esp32-settings-css"
-            )
-        ) {
+            #esp32ConnectionCard {
 
-            const style =
-                document.createElement(
-                    "style"
-                );
+                width: 100%;
 
+                margin: 0 0 26px;
 
-            style.id =
-                "rik-esp32-settings-css";
+                padding: 24px;
 
+                box-sizing: border-box;
 
-            style.textContent = `
+                border-radius: 20px;
 
-                #esp32ConnectionCard {
+                border:
+                    1px solid
+                    rgba(255,255,255,.14);
 
-                    position: relative;
+                background:
+                    rgba(20,20,22,.72);
 
-                    width: 100%;
+                box-shadow:
+                    inset 0 1px 0
+                    rgba(255,255,255,.08),
+                    0 18px 45px
+                    rgba(0,0,0,.25);
 
-                    box-sizing: border-box;
+                backdrop-filter:
+                    blur(20px);
 
-                    margin: 0 0 28px 0;
+                -webkit-backdrop-filter:
+                    blur(20px);
 
-                    padding: 26px;
+                color: white;
 
-                    border-radius: 22px;
-
-                    border: 1px solid
-                        rgba(255,255,255,0.16);
-
-                    background:
-                        linear-gradient(
-                            135deg,
-                            rgba(30,30,32,0.92),
-                            rgba(12,12,14,0.92)
-                        );
-
-                    box-shadow:
-                        inset 0 1px 0
-                            rgba(255,255,255,0.08),
-                        0 20px 50px
-                            rgba(0,0,0,0.35);
-
-                    color: white;
-
-                    backdrop-filter:
-                        blur(18px);
-
-                    -webkit-backdrop-filter:
-                        blur(18px);
-
-                }
+            }
 
 
-                #esp32ConnectionCard
-                .esp32-card-title {
+            .rik-esp32-heading {
 
-                    display: flex;
+                display: flex;
 
-                    align-items: center;
+                justify-content:
+                    space-between;
 
-                    justify-content:
-                        space-between;
+                align-items:
+                    center;
 
-                    gap: 20px;
+                margin-bottom: 7px;
 
-                    margin-bottom: 8px;
-
-                }
+            }
 
 
-                #esp32ConnectionCard
-                .esp32-card-title h3 {
+            .rik-esp32-heading h3 {
 
-                    margin: 0;
+                margin: 0;
 
-                    font-size: 15px;
+                font-size: 14px;
 
-                    font-weight: 800;
+                font-weight: 800;
 
-                    letter-spacing:
-                        0.12em;
+                letter-spacing:
+                    .1em;
 
-                }
-
-
-                #esp32ConnectionCard
-                .esp32-card-subtitle {
-
-                    margin: 0 0 22px;
-
-                    color:
-                        rgba(255,255,255,0.45);
-
-                    font-size: 11px;
-
-                }
+            }
 
 
-                .esp32-form-row {
+            .rik-esp32-description {
 
-                    display: grid;
+                margin:
+                    0 0 20px;
+
+                color:
+                    rgba(255,255,255,.45);
+
+                font-size: 11px;
+
+            }
+
+
+            .rik-esp32-fields {
+
+                display: grid;
+
+                grid-template-columns:
+                    minmax(0,1fr)
+                    130px;
+
+                gap: 12px;
+
+                margin-bottom: 14px;
+
+            }
+
+
+            .rik-esp32-field {
+
+                display: flex;
+
+                flex-direction: column;
+
+                gap: 7px;
+
+            }
+
+
+            .rik-esp32-field label {
+
+                font-size: 9px;
+
+                font-weight: 800;
+
+                letter-spacing:
+                    .1em;
+
+                color:
+                    rgba(255,255,255,.45);
+
+            }
+
+
+            .rik-esp32-field input {
+
+                width: 100%;
+
+                height: 44px;
+
+                box-sizing: border-box;
+
+                padding:
+                    0 13px;
+
+                border-radius: 10px;
+
+                border:
+                    1px solid
+                    rgba(255,255,255,.13);
+
+                background:
+                    rgba(255,255,255,.055);
+
+                color: white;
+
+                outline: none;
+
+                font-family:
+                    inherit;
+
+            }
+
+
+            .rik-esp32-field input:focus {
+
+                border-color:
+                    rgba(30,235,120,.65);
+
+                box-shadow:
+                    0 0 0 3px
+                    rgba(30,235,120,.08);
+
+            }
+
+
+            .rik-esp32-buttons {
+
+                display: flex;
+
+                gap: 9px;
+
+                flex-wrap: wrap;
+
+            }
+
+
+            .rik-esp32-btn {
+
+                height: 40px;
+
+                padding:
+                    0 16px;
+
+                border-radius: 10px;
+
+                border:
+                    1px solid
+                    rgba(255,255,255,.13);
+
+                background:
+                    rgba(255,255,255,.06);
+
+                color: white;
+
+                font-family:
+                    inherit;
+
+                font-size: 9px;
+
+                font-weight: 800;
+
+                letter-spacing:
+                    .08em;
+
+                cursor: pointer;
+
+                transition:
+                    .18s ease;
+
+            }
+
+
+            .rik-esp32-btn:hover {
+
+                background:
+                    rgba(255,255,255,.12);
+
+                transform:
+                    translateY(-1px);
+
+            }
+
+
+            .rik-esp32-btn.primary {
+
+                color: #001509;
+
+                border-color:
+                    rgba(0,255,120,.4);
+
+                background:
+                    linear-gradient(
+                        135deg,
+                        #35f58b,
+                        #08c965
+                    );
+
+            }
+
+
+            .rik-esp32-status-row {
+
+                display: flex;
+
+                justify-content:
+                    space-between;
+
+                gap: 10px;
+
+                padding-top: 15px;
+
+                margin-top: 15px;
+
+                border-top:
+                    1px solid
+                    rgba(255,255,255,.08);
+
+            }
+
+
+            #rikEsp32Status {
+
+                font-size: 9px;
+
+                font-weight: 800;
+
+                letter-spacing:
+                    .08em;
+
+            }
+
+
+            #rikEsp32Address {
+
+                color:
+                    rgba(255,255,255,.35);
+
+                font-size: 9px;
+
+            }
+
+
+            @media(max-width:700px) {
+
+                .rik-esp32-fields {
 
                     grid-template-columns:
-                        minmax(0, 1fr)
-                        130px;
-
-                    gap: 14px;
-
-                    margin-bottom: 16px;
+                        1fr;
 
                 }
 
-
-                .esp32-field {
-
-                    display: flex;
-
-                    flex-direction: column;
-
-                    gap: 8px;
-
-                }
-
-
-                .esp32-field label {
-
-                    font-size: 9px;
-
-                    font-weight: 800;
-
-                    letter-spacing:
-                        0.12em;
-
-                    color:
-                        rgba(255,255,255,0.48);
-
-                }
-
-
-                .esp32-field input {
-
-                    width: 100%;
-
-                    box-sizing: border-box;
-
-                    height: 46px;
-
-                    padding:
-                        0 15px;
-
-                    border-radius: 12px;
-
-                    border: 1px solid
-                        rgba(255,255,255,0.14);
-
-                    outline: none;
-
-                    background:
-                        rgba(255,255,255,0.055);
-
-                    color: white;
-
-                    font-family:
-                        inherit;
-
-                    font-size: 13px;
-
-                    transition:
-                        border-color .2s ease,
-                        background .2s ease,
-                        box-shadow .2s ease;
-
-                }
-
-
-                .esp32-field input::placeholder {
-
-                    color:
-                        rgba(255,255,255,0.25);
-
-                }
-
-
-                .esp32-field input:focus {
-
-                    border-color:
-                        rgba(0,255,120,0.65);
-
-                    background:
-                        rgba(255,255,255,0.08);
-
-                    box-shadow:
-                        0 0 0 3px
-                        rgba(0,255,120,0.08);
-
-                }
-
-
-                .esp32-buttons {
-
-                    display: flex;
-
-                    gap: 10px;
-
-                    flex-wrap: wrap;
-
-                }
-
-
-                .esp32-btn {
-
-                    min-height: 42px;
-
-                    padding:
-                        0 18px;
-
-                    border-radius: 12px;
-
-                    border: 1px solid
-                        rgba(255,255,255,0.12);
-
-                    background:
-                        rgba(255,255,255,0.06);
-
-                    color: white;
-
-                    font-family:
-                        inherit;
-
-                    font-size: 10px;
-
-                    font-weight: 800;
-
-                    letter-spacing:
-                        0.08em;
-
-                    cursor: pointer;
-
-                    transition:
-                        transform .15s ease,
-                        background .15s ease,
-                        border-color .15s ease;
-
-                }
-
-
-                .esp32-btn:hover {
-
-                    background:
-                        rgba(255,255,255,0.11);
-
-                    border-color:
-                        rgba(255,255,255,0.25);
-
-                    transform:
-                        translateY(-1px);
-
-                }
-
-
-                .esp32-btn:active {
-
-                    transform:
-                        translateY(1px);
-
-                }
-
-
-                .esp32-btn.primary {
-
-                    background:
-                        linear-gradient(
-                            135deg,
-                            #19e875,
-                            #00b95a
-                        );
-
-                    border-color:
-                        rgba(0,255,120,0.5);
-
-                    color: #00150a;
-
-                    box-shadow:
-                        0 8px 25px
-                        rgba(0,220,100,0.18);
-
-                }
-
-
-                .esp32-btn.primary:hover {
-
-                    background:
-                        linear-gradient(
-                            135deg,
-                            #35f58b,
-                            #08ce68
-                        );
-
-                }
-
-
-                .esp32-status-row {
-
-                    display: flex;
-
-                    align-items: center;
-
-                    justify-content:
-                        space-between;
-
-                    gap: 15px;
-
-                    margin-top: 20px;
-
-                    padding-top: 18px;
-
-                    border-top:
-                        1px solid
-                        rgba(255,255,255,0.08);
-
-                }
-
-
-                .esp32-status {
-
-                    display: inline-flex;
-
-                    align-items: center;
-
-                    gap: 8px;
-
-                    font-size: 10px;
-
-                    font-weight: 800;
-
-                    letter-spacing:
-                        0.08em;
-
-                }
-
-
-                .esp32-status::before {
-
-                    content: "";
-
-                    width: 8px;
-
-                    height: 8px;
-
-                    border-radius: 50%;
-
-                    background:
-                        #777;
-
-                    box-shadow:
-                        0 0 0 5px
-                        rgba(255,255,255,0.04);
-
-                }
-
-
-                .esp32-status.connected {
-
-                    color:
-                        #20e878;
-
-                }
-
-
-                .esp32-status.connected::before {
-
-                    background:
-                        #20e878;
-
-                    box-shadow:
-                        0 0 0 5px
-                        rgba(32,232,120,0.10),
-                        0 0 15px
-                        rgba(32,232,120,0.7);
-
-                }
-
-
-                .esp32-status.offline {
-
-                    color:
-                        rgba(255,255,255,0.5);
-
-                }
-
-
-                .esp32-status.testing {
-
-                    color:
-                        #ffd84d;
-
-                }
-
-
-                .esp32-status.testing::before {
-
-                    background:
-                        #ffd84d;
-
-                }
-
-
-                .esp32-status.error {
-
-                    color:
-                        #ff5353;
-
-                }
-
-
-                .esp32-status.error::before {
-
-                    background:
-                        #ff5353;
-
-                }
-
-
-                .esp32-current {
-
-                    font-size: 9px;
-
-                    color:
-                        rgba(255,255,255,0.35);
-
-                }
-
-
-                @media (max-width: 700px) {
-
-                    .esp32-form-row {
-
-                        grid-template-columns:
-                            1fr;
-
-                    }
-
-                }
-
-            `;
-
-
-            document.head.appendChild(
-                style
-            );
-
-        }
-
-
-        /*
-         * -------------------------------------------------
-         * Create card
-         * -------------------------------------------------
-         */
-
-        const card =
-            document.createElement(
-                "section"
-            );
-
-
-        card.id =
-            "esp32ConnectionCard";
-
-
-        card.innerHTML = `
-
-            <div class="esp32-card-title">
-
-                <h3>
-                    ESP32 CONNECTION
-                </h3>
-
-                <div
-                    id="esp32SettingsStatus"
-                    class="esp32-status offline"
-                >
-                    ENTER ESP32 IP
-                </div>
-
-            </div>
-
-
-            <p class="esp32-card-subtitle">
-                Configure the IP address of your ESP32 robot controller.
-            </p>
-
-
-            <div class="esp32-form-row">
-
-                <div class="esp32-field">
-
-                    <label for="esp32IpInput">
-                        ESP32 IP ADDRESS
-                    </label>
-
-                    <input
-                        id="esp32IpInput"
-                        type="text"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        spellcheck="false"
-                        placeholder="192.168.1.100"
-                    />
-
-                </div>
-
-
-                <div class="esp32-field">
-
-                    <label for="esp32PortInput">
-                        WEBSOCKET PORT
-                    </label>
-
-                    <input
-                        id="esp32PortInput"
-                        type="number"
-                        min="1"
-                        max="65535"
-                        value="81"
-                    />
-
-                </div>
-
-            </div>
-
-
-            <div class="esp32-buttons">
-
-                <button
-                    id="saveESP32Button"
-                    class="esp32-btn primary"
-                    type="button"
-                >
-                    SAVE & CONNECT
-                </button>
-
-
-                <button
-                    id="testESP32Button"
-                    class="esp32-btn"
-                    type="button"
-                >
-                    TEST CONNECTION
-                </button>
-
-
-                <button
-                    id="disconnectESP32Button"
-                    class="esp32-btn"
-                    type="button"
-                >
-                    DISCONNECT
-                </button>
-
-            </div>
-
-
-            <div class="esp32-status-row">
-
-                <div
-                    id="esp32ConnectionMessage"
-                    class="esp32-current"
-                >
-                    No ESP32 IP configured.
-                </div>
-
-                <div
-                    id="esp32CurrentAddress"
-                    class="esp32-current"
-                >
-                    —
-                </div>
-
-            </div>
+            }
 
         `;
 
 
-        /*
-         * -------------------------------------------------
-         * Insert card BEFORE ROBOT section
-         * -------------------------------------------------
-         */
-
-        const robotHeading =
-            Array.from(
-                settingsPage.querySelectorAll(
-                    "*"
-                )
-            ).find(
-                element =>
-                    element.textContent
-                        ?.trim()
-                        .toUpperCase() ===
-                    "ROBOT"
-            );
-
-
-        if (
-            robotHeading &&
-            robotHeading.parentElement
-        ) {
-
-            robotHeading.parentElement
-                .insertBefore(
-                    card,
-                    robotHeading.parentElement
-                        .firstChild
-                );
-
-        } else {
-
-            /*
-             * Fallback:
-             * insert near the top of settings.
-             */
-
-            const firstSection =
-                settingsPage.firstElementChild;
-
-
-            if (firstSection) {
-
-                settingsPage.insertBefore(
-                    card,
-                    firstSection
-                );
-
-            } else {
-
-                settingsPage.appendChild(
-                    card
-                );
-
-            }
-
-        }
-
-
-        bindESP32Settings();
-
-        loadESP32Settings();
+        document.head.appendChild(
+            style
+        );
 
     }
 
 
-    /* =====================================================
-       SET ESP32 STATUS
-       ===================================================== */
-
-    function setESP32Status(
-        message,
-        type = "offline"
-    ) {
-
-        const status =
-            $("#esp32SettingsStatus");
+    const card =
+        document.createElement(
+            "section"
+        );
 
 
-        if (!status) {
+    card.id =
+        "esp32ConnectionCard";
 
-            return;
 
-        }
+    card.innerHTML = `
 
+        <div class="rik-esp32-heading">
+
+            <h3>
+                ESP32 CONNECTION
+            </h3>
+
+            <span
+                id="rikEsp32Status"
+            >
+                OFFLINE
+            </span>
+
+        </div>
+
+
+        <p class="rik-esp32-description">
+
+            Enter the IP address of your ESP32
+            robot controller.
+
+        </p>
+
+
+        <div class="rik-esp32-fields">
+
+            <div class="rik-esp32-field">
+
+                <label>
+                    ESP32 IP ADDRESS
+                </label>
+
+                <input
+                    id="esp32IpInput"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="192.168.1.100"
+                    autocomplete="off"
+                >
+
+            </div>
+
+
+            <div class="rik-esp32-field">
+
+                <label>
+                    WEBSOCKET PORT
+                </label>
+
+                <input
+                    id="esp32PortInput"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value="81"
+                >
+
+            </div>
+
+        </div>
+
+
+        <div class="rik-esp32-buttons">
+
+            <button
+                id="saveESP32Button"
+                class="rik-esp32-btn primary"
+                type="button"
+            >
+                SAVE & CONNECT
+            </button>
+
+
+            <button
+                id="testESP32Button"
+                class="rik-esp32-btn"
+                type="button"
+            >
+                TEST CONNECTION
+            </button>
+
+
+            <button
+                id="disconnectESP32Button"
+                class="rik-esp32-btn"
+                type="button"
+            >
+                DISCONNECT
+            </button>
+
+        </div>
+
+
+        <div class="rik-esp32-status-row">
+
+            <span
+                id="rikEsp32StatusMessage"
+            >
+                No ESP32 configured.
+            </span>
+
+            <span
+                id="rikEsp32Address"
+            >
+                —
+            </span>
+
+        </div>
+
+    `;
+
+
+    /*
+     * Put card near top of Settings.
+     */
+
+    settingsPage.prepend(
+        card
+    );
+
+
+    bindESP32Settings();
+
+    loadESP32Settings();
+
+}
+
+
+function loadESP32Settings() {
+
+    const settings =
+        getESP32Settings();
+
+
+    const ipInput =
+        $("#esp32IpInput");
+
+
+    const portInput =
+        $("#esp32PortInput");
+
+
+    if (ipInput) {
+
+        ipInput.value =
+            settings.ip;
+
+    }
+
+
+    if (portInput) {
+
+        portInput.value =
+            settings.port;
+
+    }
+
+
+    updateESP32SettingsUI();
+
+}
+
+
+function updateESP32SettingsUI() {
+
+    const settings =
+        getESP32Settings();
+
+
+    const status =
+        $("#rikEsp32Status");
+
+
+    const message =
+        $("#rikEsp32StatusMessage");
+
+
+    const address =
+        $("#rikEsp32Address");
+
+
+    if (address) {
+
+        address.textContent =
+            settings.ip
+                ? `${settings.ip}:${settings.port}`
+                : "—";
+
+    }
+
+
+    if (status) {
 
         status.textContent =
-            message;
+            RIK.connected
+                ? "CONNECTED"
+                : settings.ip
+                    ? "OFFLINE"
+                    : "NOT CONFIGURED";
 
-
-        status.className =
-            `esp32-status ${type}`;
-
-    }
-
-
-    /* =====================================================
-       UPDATE ADDRESS DISPLAY
-       ===================================================== */
-
-    function updateESP32Address() {
-
-        const settings =
-            getESP32Settings();
-
-
-        const address =
-            $("#esp32CurrentAddress");
-
-
-        const message =
-            $("#esp32ConnectionMessage");
-
-
-        if (address) {
-
-            address.textContent =
-                settings.ip
-                    ? `${settings.ip}:${settings.port}`
-                    : "—";
-
-        }
-
-
-        if (message) {
-
-            message.textContent =
-                settings.ip
-                    ? `Controller: ${settings.ip}:${settings.port}`
-                    : "No ESP32 IP configured.";
-
-        }
+        status.style.color =
+            RIK.connected
+                ? "#20e878"
+                : "#999";
 
     }
 
 
-    /* =====================================================
-       LOAD SETTINGS
-       ===================================================== */
+    if (message) {
 
-    function loadESP32Settings() {
+        message.textContent =
+            RIK.connected
+                ? "ESP32 connection active."
+                : settings.ip
+                    ? "Saved ESP32 address."
+                    : "Enter ESP32 IP address.";
 
-        const settings =
-            getESP32Settings();
+    }
 
-
-        const ipInput =
-            $("#esp32IpInput");
-
-
-        const portInput =
-            $("#esp32PortInput");
+}
 
 
-        if (ipInput) {
+function bindESP32Settings() {
 
-            ipInput.value =
-                settings.ip;
-
-        }
+    const ipInput =
+        $("#esp32IpInput");
 
 
-        if (portInput) {
-
-            portInput.value =
-                settings.port;
-
-        }
+    const portInput =
+        $("#esp32PortInput");
 
 
-        updateESP32Address();
+    const saveButton =
+        $("#saveESP32Button");
 
 
-        if (settings.ip) {
+    const testButton =
+        $("#testESP32Button");
 
-            setESP32Status(
-                state.connected
-                    ? "CONNECTED"
-                    : "OFFLINE",
-                state.connected
-                    ? "connected"
-                    : "offline"
-            );
 
-        } else {
+    const disconnectButton =
+        $("#disconnectESP32Button");
 
-            setESP32Status(
-                "ENTER ESP32 IP",
-                "offline"
+
+    saveButton?.addEventListener(
+        "click",
+        () => {
+
+            const saved =
+                saveESP32Settings(
+                    ipInput?.value,
+                    portInput?.value
+                );
+
+
+            if (!saved) {
+
+                alert(
+                    "Please enter the ESP32 IP address."
+                );
+
+                return;
+
+            }
+
+
+            disconnectESP32();
+
+
+            updateESP32SettingsUI();
+
+
+            setTimeout(
+                connectESP32,
+                150
             );
 
         }
-
-    }
-
-
-    /* =====================================================
-       BIND SETTINGS BUTTONS
-       ===================================================== */
-
-    function bindESP32Settings() {
-
-        const ipInput =
-            $("#esp32IpInput");
+    );
 
 
-        const portInput =
-            $("#esp32PortInput");
+    testButton?.addEventListener(
+        "click",
+        () => {
 
-
-        const saveButton =
-            $("#saveESP32Button");
-
-
-        const testButton =
-            $("#testESP32Button");
-
-
-        const disconnectButton =
-            $("#disconnectESP32Button");
-
-
-        /*
-         * SAVE & CONNECT
-         */
-
-        saveButton?.addEventListener(
-            "click",
-            () => {
-
-                const result =
-                    saveESP32Settings(
-                        ipInput?.value,
-                        portInput?.value
-                    );
-
-
-                if (!result.success) {
-
-                    setESP32Status(
-                        result.error,
-                        "error"
-                    );
-
-
-                    return;
-
-                }
-
-
-                updateESP32Address();
-
-
-                setESP32Status(
-                    "CONNECTING...",
-                    "testing"
+            const saved =
+                saveESP32Settings(
+                    ipInput?.value,
+                    portInput?.value
                 );
 
 
-                disconnectESP32();
+            if (!saved) {
 
-
-                setTimeout(
-                    connectESP32,
-                    150
+                alert(
+                    "Please enter the ESP32 IP address."
                 );
 
-            }
-        );
-
-
-        /*
-         * TEST CONNECTION
-         */
-
-        testButton?.addEventListener(
-            "click",
-            () => {
-
-                const result =
-                    saveESP32Settings(
-                        ipInput?.value,
-                        portInput?.value
-                    );
-
-
-                if (!result.success) {
-
-                    setESP32Status(
-                        result.error,
-                        "error"
-                    );
-
-
-                    return;
-
-                }
-
-
-                updateESP32Address();
-
-
-                setESP32Status(
-                    "TESTING...",
-                    "testing"
-                );
-
-
-                disconnectESP32();
-
-
-                setTimeout(
-                    connectESP32,
-                    150
-                );
+                return;
 
             }
-        );
 
 
-        /*
-         * DISCONNECT
-         */
-
-        disconnectButton?.addEventListener(
-            "click",
-            () => {
-
-                disconnectESP32();
+            disconnectESP32();
 
 
-                setESP32Status(
-                    "OFFLINE",
-                    "offline"
-                );
-
-            }
-        );
+            updateESP32SettingsUI();
 
 
-        /*
-         * ENTER KEY
-         */
-
-        ipInput?.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key ===
-                    "Enter"
-                ) {
-
-                    event.preventDefault();
-
-                    saveButton?.click();
-
-                }
-
-            }
-        );
-
-
-        portInput?.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key ===
-                    "Enter"
-                ) {
-
-                    event.preventDefault();
-
-                    saveButton?.click();
-
-                }
-
-            }
-        );
-
-    }
-
-
-    /* =====================================================
-       CONNECT ESP32
-       ===================================================== */
-
-    function connectESP32() {
-
-        const url =
-            getESP32URL();
-
-
-        if (!url) {
-
-            setESP32Status(
-                "ENTER ESP32 IP",
-                "offline"
+            setTimeout(
+                connectESP32,
+                150
             );
 
+        }
+    );
 
-            return;
+
+    disconnectButton?.addEventListener(
+        "click",
+        () => {
+
+            disconnectESP32();
+
+            updateESP32SettingsUI();
 
         }
+    );
 
 
-        if (
-            ESP32.socket &&
-            (
-                ESP32.socket.readyState ===
+    ipInput?.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Enter"
+            ) {
+
+                saveButton?.click();
+
+            }
+
+        }
+    );
+
+
+    portInput?.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Enter"
+            ) {
+
+                saveButton?.click();
+
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   ESP32 WEBSOCKET
+   ========================================================= */
+
+function connectESP32() {
+
+    const url =
+        getESP32URL();
+
+
+    if (!url) {
+
+        updateESP32SettingsUI();
+
+        return;
+
+    }
+
+
+    if (
+        RIK.socket &&
+        (
+            RIK.socket.readyState ===
                 WebSocket.OPEN ||
 
-                ESP32.socket.readyState ===
+            RIK.socket.readyState ===
                 WebSocket.CONNECTING
-            )
-        ) {
+        )
+    ) {
 
-            return;
+        return;
 
-        }
+    }
 
 
-        console.log(
-            "[RIK] Connecting to:",
+    console.log(
+        "RIK → ESP32:",
+        url
+    );
+
+
+    const socket =
+        new WebSocket(
             url
         );
 
 
-        setESP32Status(
-            "CONNECTING...",
-            "testing"
-        );
+    RIK.socket =
+        socket;
 
 
-        let socket;
+    socket.addEventListener(
+        "open",
+        () => {
+
+            RIK.connected =
+                true;
 
 
-        try {
+            RIK.reconnectDelay =
+                1500;
 
-            socket =
-                new WebSocket(
-                    url
-                );
 
-        } catch (error) {
+            updateConnectionUI();
 
-            console.error(
-                "[RIK] WebSocket error:",
-                error
+            updateESP32SettingsUI();
+
+
+            console.log(
+                "RIK: ESP32 CONNECTED"
             );
 
 
-            setESP32Status(
-                "CONNECTION FAILED",
-                "error"
+            startHeartbeat();
+
+
+            sendPacket({
+
+                type:
+                    "hello",
+
+                client:
+                    "RIK",
+
+                version:
+                    1,
+
+                timestamp:
+                    Date.now()
+
+            });
+
+        }
+    );
+
+
+    socket.addEventListener(
+        "message",
+        event => {
+
+            handleESP32Message(
+                event.data
             );
+
+        }
+    );
+
+
+    socket.addEventListener(
+        "close",
+        () => {
+
+            if (
+                RIK.socket === socket
+            ) {
+
+                RIK.socket =
+                    null;
+
+            }
+
+
+            RIK.connected =
+                false;
+
+
+            stopHeartbeat();
+
+
+            updateConnectionUI();
+
+            updateESP32SettingsUI();
 
 
             scheduleReconnect();
 
-
-            return;
-
         }
+    );
 
 
-        ESP32.socket =
-            socket;
+    socket.addEventListener(
+        "error",
+        error => {
 
-
-        ESP32.connectionTimeout =
-            setTimeout(
-                () => {
-
-                    if (
-                        socket.readyState ===
-                        WebSocket.CONNECTING
-                    ) {
-
-                        socket.close();
-
-                    }
-
-                },
-                7000
+            console.warn(
+                "RIK ESP32 WebSocket error:",
+                error
             );
 
 
-        socket.addEventListener(
-            "open",
+            RIK.connected =
+                false;
+
+
+            updateConnectionUI();
+
+            updateESP32SettingsUI();
+
+        }
+    );
+
+}
+
+
+function disconnectESP32() {
+
+    if (
+        RIK.reconnectTimer
+    ) {
+
+        clearTimeout(
+            RIK.reconnectTimer
+        );
+
+
+        RIK.reconnectTimer =
+            null;
+
+    }
+
+
+    stopHeartbeat();
+
+
+    if (RIK.socket) {
+
+        try {
+
+            RIK.socket.close();
+
+        } catch (_) {}
+
+    }
+
+
+    RIK.socket =
+        null;
+
+
+    RIK.connected =
+        false;
+
+
+    stopDrive(
+        false
+    );
+
+
+    updateConnectionUI();
+
+}
+
+
+function scheduleReconnect() {
+
+    if (
+        RIK.reconnectTimer
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        !getESP32URL()
+    ) {
+
+        return;
+
+    }
+
+
+    RIK.reconnectTimer =
+        setTimeout(
             () => {
 
-                clearTimeout(
-                    ESP32.connectionTimeout
-                );
+                RIK.reconnectTimer =
+                    null;
 
 
-                ESP32.reconnectDelay =
-                    1000;
+                connectESP32();
 
 
-                state.connected =
-                    true;
+                RIK.reconnectDelay =
+                    Math.min(
+                        RIK.reconnectDelay * 1.8,
+                        RIK.maxReconnectDelay
+                    );
+
+            },
+            RIK.reconnectDelay
+        );
+
+}
 
 
-                updateConnectionUI();
+function startHeartbeat() {
+
+    stopHeartbeat();
 
 
-                setESP32Status(
-                    "CONNECTED",
-                    "connected"
-                );
+    RIK.heartbeatTimer =
+        setInterval(
+            () => {
 
+                if (
+                    !RIK.connected
+                ) {
 
-                updateESP32Address();
+                    return;
 
-
-                console.log(
-                    "[RIK] ESP32 CONNECTED"
-                );
-
-
-                startHeartbeat();
+                }
 
 
                 sendPacket({
 
-                    type: "hello",
-
-                    client: "RIK",
-
-                    version: 1,
+                    type:
+                        "heartbeat",
 
                     timestamp:
                         Date.now()
 
                 });
 
-            }
+            },
+            5000
+        );
+
+}
+
+
+function stopHeartbeat() {
+
+    if (
+        RIK.heartbeatTimer
+    ) {
+
+        clearInterval(
+            RIK.heartbeatTimer
         );
 
 
-        socket.addEventListener(
-            "message",
-            event => {
+        RIK.heartbeatTimer =
+            null;
 
-                handleESP32Message(
-                    event.data
-                );
+    }
 
-            }
+}
+
+
+/* =========================================================
+   SEND PACKET
+   ========================================================= */
+
+function sendPacket(
+    packet
+) {
+
+    if (
+        !RIK.socket ||
+        RIK.socket.readyState !==
+            WebSocket.OPEN
+    ) {
+
+        return false;
+
+    }
+
+
+    try {
+
+        RIK.socket.send(
+            JSON.stringify(
+                packet
+            )
         );
 
 
-        socket.addEventListener(
-            "close",
-            () => {
+        return true;
 
-                clearTimeout(
-                    ESP32.connectionTimeout
-                );
+    } catch (error) {
 
-
-                stopHeartbeat();
+        console.error(
+            "RIK send error:",
+            error
+        );
 
 
-                if (
-                    ESP32.socket ===
-                    socket
-                ) {
+        return false;
 
-                    ESP32.socket =
-                        null;
+    }
+
+}
+
+
+/* =========================================================
+   ROBOT COMMAND PROTOCOL
+   ========================================================= */
+
+function sendCommand(
+    command
+) {
+
+    if (
+        !RIK.connected
+    ) {
+
+        console.warn(
+            "RIK: ESP32 is offline."
+        );
+
+        return false;
+
+    }
+
+
+    RIK.commandId++;
+
+
+    const packet = {
+
+        type:
+            "command",
+
+        id:
+            RIK.commandId,
+
+        command,
+
+        speed:
+            RIK.speed,
+
+        timestamp:
+            Date.now()
+
+    };
+
+
+    console.log(
+        "RIK → ESP32:",
+        packet
+    );
+
+
+    return sendPacket(
+        packet
+    );
+
+}
+
+
+/* =========================================================
+   RECEIVE ESP32 DATA
+   ========================================================= */
+
+function handleESP32Message(
+    raw
+) {
+
+    let data;
+
+
+    try {
+
+        data =
+            JSON.parse(
+                raw
+            );
+
+    } catch (_) {
+
+        console.warn(
+            "RIK: Non-JSON ESP32 message:",
+            raw
+        );
+
+        return;
+
+    }
+
+
+    console.log(
+        "RIK ← ESP32:",
+        data
+    );
+
+
+    if (
+        data.type ===
+        "telemetry"
+    ) {
+
+        updateTelemetry(
+            data
+        );
+
+    }
+
+
+    if (
+        data.type ===
+        "status"
+    ) {
+
+        updateTelemetry(
+            data
+        );
+
+    }
+
+
+    if (
+        data.type ===
+        "ack"
+    ) {
+
+        console.log(
+            "RIK: Command acknowledged:",
+            data
+        );
+
+    }
+
+}
+
+
+function updateTelemetry(
+    data
+) {
+
+    /*
+     * Soil moisture
+     */
+
+    const soil =
+        data.soil ??
+        data.soilMoisture;
+
+
+    if (
+        soil !== undefined
+    ) {
+
+        const elements = [
+
+            $("#soilValue"),
+
+            $("#islandSoilValue")
+
+        ];
+
+
+        elements.forEach(
+            element => {
+
+                if (element) {
+
+                    element.textContent =
+                        `${soil}%`;
 
                 }
 
-
-                state.connected =
-                    false;
-
-
-                updateConnectionUI();
-
-
-                setESP32Status(
-                    "OFFLINE",
-                    "offline"
-                );
-
-
-                rejectPending();
-
-
-                scheduleReconnect();
-
             }
         );
 
-
-        socket.addEventListener(
-            "error",
-            error => {
-
-                console.error(
-                    "[RIK] ESP32 socket error:",
-                    error
-                );
+    }
 
 
-                state.connected =
-                    false;
+    /*
+     * Air quality
+     */
+
+    const air =
+        data.air ??
+        data.mq135 ??
+        data.aqi;
 
 
-                updateConnectionUI();
+    if (
+        air !== undefined
+    ) {
+
+        const elements = [
+
+            $("#airValue"),
+
+            $("#islandAirValue")
+
+        ];
 
 
-                setESP32Status(
-                    "CONNECTION ERROR",
-                    "error"
-                );
+        elements.forEach(
+            element => {
+
+                if (element) {
+
+                    element.textContent =
+                        air;
+
+                }
 
             }
         );
@@ -1549,125 +1595,184 @@
     }
 
 
-    /* =====================================================
-       DISCONNECT
-       ===================================================== */
+    /*
+     * RSSI
+     */
 
-    function disconnectESP32() {
+    if (
+        data.rssi !== undefined
+    ) {
 
-        if (
-            ESP32.reconnectTimer
-        ) {
-
-            clearTimeout(
-                ESP32.reconnectTimer
-            );
+        const signal =
+            $("#signalValue");
 
 
-            ESP32.reconnectTimer =
-                null;
+        if (signal) {
 
-        }
-
-
-        stopHeartbeat();
-
-
-        if (
-            ESP32.socket
-        ) {
-
-            try {
-
-                ESP32.socket.close();
-
-            } catch (_) {}
+            signal.textContent =
+                `${data.rssi} dBm`;
 
         }
 
+    }
 
-        ESP32.socket =
-            null;
-
-
-        state.connected =
-            false;
+}
 
 
-        rejectPending();
+/* =========================================================
+   MOVEMENT
+   ========================================================= */
 
+function startDrive(
+    command
+) {
 
-        updateConnectionUI();
+    if (
+        !RIK.connected
+    ) {
+
+        return;
 
     }
 
 
-    /* =====================================================
-       RECONNECT
-       ===================================================== */
-
-    function scheduleReconnect() {
-
-        if (
-            ESP32.reconnectTimer
-        ) {
-
-            return;
-
-        }
+    RIK.driveCommand =
+        command;
 
 
-        if (
-            !getESP32URL()
-        ) {
-
-            return;
-
-        }
+    updateDriveUI(
+        command
+    );
 
 
-        ESP32.reconnectTimer =
-            setTimeout(
-                () => {
+    sendCommand(
+        command
+    );
 
-                    ESP32.reconnectTimer =
-                        null;
-
-
-                    connectESP32();
+}
 
 
-                    ESP32.reconnectDelay =
-                        Math.min(
-                            ESP32.reconnectDelay * 2,
-                            ESP32.reconnectMax
-                        );
+function stopDrive(
+    sendToESP = true
+) {
 
-                },
-                ESP32.reconnectDelay
-            );
+    const wasMoving =
+        Boolean(
+            RIK.driveCommand
+        );
+
+
+    RIK.driveCommand =
+        null;
+
+
+    updateDriveUI(
+        null
+    );
+
+
+    if (
+        sendToESP &&
+        wasMoving &&
+        RIK.connected
+    ) {
+
+        sendCommand(
+            "STOP"
+        );
+
+    }
+
+}
+
+
+function updateDriveUI(
+    command
+) {
+
+    const driveState =
+        $("#driveState");
+
+
+    if (driveState) {
+
+        driveState.textContent =
+            command ||
+            "STOPPED";
 
     }
 
 
-    /* =====================================================
-       HEARTBEAT
-       ===================================================== */
+    $$(".control-button, .rik-pearl-button")
+        .forEach(
+            button => {
 
-    function startHeartbeat() {
+                const active =
+                    command &&
+                    button.dataset.command ===
+                        command;
 
-        stopHeartbeat();
+
+                button.classList.toggle(
+                    "command-active",
+                    Boolean(
+                        active
+                    )
+                );
+
+            }
+        );
+
+}
 
 
-        ESP32.heartbeatTimer =
-            setInterval(
-                () => {
+/* =========================================================
+   MOVEMENT BUTTONS
+   ========================================================= */
+
+function setupMovementButtons() {
+
+    const buttons =
+        $(
+            ".control-button, .movement-button"
+        );
+
+
+    const movementButtons =
+        buttons
+            ? [ ...$(
+                ".control-button, .movement-button"
+            ) ]
+            : [];
+
+
+    movementButtons.forEach(
+        button => {
+
+            const command =
+                button.dataset.command;
+
+
+            if (!command) {
+
+                return;
+
+            }
+
+
+            let held =
+                false;
+
+
+            button.addEventListener(
+                "pointerdown",
+                event => {
+
+                    event.preventDefault();
+
 
                     if (
-                        !state.connected ||
-                        !ESP32.socket ||
-                        ESP32.socket.readyState !==
-                            WebSocket.OPEN
+                        held
                     ) {
 
                         return;
@@ -1675,861 +1780,113 @@
                     }
 
 
-                    sendPacket({
-
-                        type:
-                            "heartbeat",
-
-                        timestamp:
-                            Date.now()
-
-                    });
-
-                },
-                3000
-            );
-
-    }
+                    held =
+                        true;
 
 
-    function stopHeartbeat() {
-
-        if (
-            ESP32.heartbeatTimer
-        ) {
-
-            clearInterval(
-                ESP32.heartbeatTimer
-            );
-
-
-            ESP32.heartbeatTimer =
-                null;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       SEND PACKET
-       ===================================================== */
-
-    function sendPacket(
-        packet
-    ) {
-
-        if (
-            !ESP32.socket ||
-            ESP32.socket.readyState !==
-                WebSocket.OPEN
-        ) {
-
-            return false;
-
-        }
-
-
-        try {
-
-            ESP32.socket.send(
-                JSON.stringify(
-                    packet
-                )
-            );
-
-
-            return true;
-
-        } catch (error) {
-
-            console.error(
-                "[RIK] Send failed:",
-                error
-            );
-
-
-            return false;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       SEND ROBOT COMMAND
-       ===================================================== */
-
-    function sendCommand(
-        command
-    ) {
-
-        if (
-            !state.connected
-        ) {
-
-            console.warn(
-                "[RIK] Robot is offline."
-            );
-
-
-            return false;
-
-        }
-
-
-        const id =
-            ++ESP32.commandId;
-
-
-        const packet = {
-
-            type:
-                "command",
-
-            id,
-
-            command,
-
-            speed:
-                state.speed,
-
-            timestamp:
-                Date.now()
-
-        };
-
-
-        if (
-            !sendPacket(
-                packet
-            )
-        ) {
-
-            return false;
-
-        }
-
-
-        console.log(
-            "[RIK → ESP32]",
-            packet
-        );
-
-
-        const timeout =
-            setTimeout(
-                () => {
-
-                    ESP32.pending.delete(
-                        id
+                    button.classList.add(
+                        "pressed"
                     );
 
-                },
-                2500
-            );
 
-
-        ESP32.pending.set(
-            id,
-            {
-                command,
-                timeout
-            }
-        );
-
-
-        return true;
-
-    }
-
-
-    /* =====================================================
-       HANDLE ESP32 MESSAGE
-       ===================================================== */
-
-    function handleESP32Message(
-        raw
-    ) {
-
-        let data;
-
-
-        try {
-
-            data =
-                JSON.parse(
-                    raw
-                );
-
-        } catch (_) {
-
-            console.warn(
-                "[RIK] Invalid ESP32 data:",
-                raw
-            );
-
-
-            return;
-
-        }
-
-
-        if (
-            data.type ===
-            "ack"
-        ) {
-
-            const pending =
-                ESP32.pending.get(
-                    Number(
-                        data.id
-                    )
-                );
-
-
-            if (pending) {
-
-                clearTimeout(
-                    pending.timeout
-                );
-
-
-                ESP32.pending.delete(
-                    Number(
-                        data.id
-                    )
-                );
-
-            }
-
-
-            return;
-
-        }
-
-
-        if (
-            data.type ===
-                "telemetry" ||
-
-            data.type ===
-                "status"
-        ) {
-
-            updateTelemetry(
-                data
-            );
-
-        }
-
-    }
-
-
-    /* =====================================================
-       TELEMETRY
-       ===================================================== */
-
-    function updateTelemetry(
-        data
-    ) {
-
-        if (
-            data.soil !==
-            undefined
-        ) {
-
-            state.soil =
-                data.soil;
-
-        }
-
-
-        if (
-            data.air !==
-            undefined
-        ) {
-
-            state.air =
-                data.air;
-
-        }
-
-
-        const soil =
-            $("#islandSoilValue");
-
-
-        if (soil) {
-
-            soil.textContent =
-                `${state.soil}%`;
-
-        }
-
-
-        const air =
-            $("#islandAirValue");
-
-
-        if (air) {
-
-            air.textContent =
-                state.air;
-
-        }
-
-    }
-
-
-    /* =====================================================
-       PENDING COMMANDS
-       ===================================================== */
-
-    function rejectPending() {
-
-        ESP32.pending.forEach(
-            item => {
-
-                clearTimeout(
-                    item.timeout
-                );
-
-            }
-        );
-
-
-        ESP32.pending.clear();
-
-    }
-
-
-    /* =====================================================
-       MOVEMENT
-       ===================================================== */
-
-    function setDriveState(
-        command
-    ) {
-
-        state.driveCommand =
-            command;
-
-
-        const status =
-            $("#driveState");
-
-
-        if (status) {
-
-            status.textContent =
-                command ||
-                "STOPPED";
-
-        }
-
-
-        $$(".rik-pearl-button")
-            .forEach(
-                button => {
-
-                    button.classList.toggle(
-                        "command-active",
-                        Boolean(
-                            command
-                        ) &&
-                        button.dataset.command ===
-                            command
+                    startDrive(
+                        command
                     );
 
                 }
             );
 
-    }
+
+            button.addEventListener(
+                "pointerup",
+                event => {
+
+                    event.preventDefault();
 
 
-    function startDrive(
-        command
-    ) {
-
-        if (
-            !state.connected
-        ) {
-
-            return;
-
-        }
-
-
-        setDriveState(
-            command
-        );
-
-
-        sendCommand(
-            command
-        );
-
-    }
-
-
-    function stopDrive(
-        sendToESP = true
-    ) {
-
-        const wasMoving =
-            Boolean(
-                state.driveCommand
-            );
-
-
-        setDriveState(
-            null
-        );
-
-
-        if (
-            sendToESP &&
-            wasMoving &&
-            state.connected
-        ) {
-
-            sendCommand(
-                "STOP"
-            );
-
-        }
-
-    }
-
-
-    /* =====================================================
-       MOVEMENT BUTTONS
-       ===================================================== */
-
-    function setupMovementButtons() {
-
-        $$(".rik-pearl-button")
-            .forEach(
-                button => {
-
-                    const command =
-                        button.dataset.command;
-
-
-                    if (!command) {
+                    if (!held) {
 
                         return;
 
                     }
 
 
-                    let pressed =
+                    held =
                         false;
 
 
-                    button.addEventListener(
-                        "pointerdown",
-                        event => {
-
-                            if (
-                                event.button !==
-                                    undefined &&
-                                event.button !==
-                                    0
-                            ) {
-
-                                return;
-
-                            }
-
-
-                            event.preventDefault();
-
-
-                            if (
-                                pressed
-                            ) {
-
-                                return;
-
-                            }
-
-
-                            pressed =
-                                true;
-
-
-                            button.classList.add(
-                                "pressed"
-                            );
-
-
-                            startDrive(
-                                command
-                            );
-
-                        }
+                    button.classList.remove(
+                        "pressed"
                     );
 
 
-                    button.addEventListener(
-                        "pointerup",
-                        event => {
-
-                            event.preventDefault();
-
-
-                            if (
-                                !pressed
-                            ) {
-
-                                return;
-
-                            }
-
-
-                            pressed =
-                                false;
-
-
-                            button.classList.remove(
-                                "pressed"
-                            );
-
-
-                            stopDrive();
-
-                        }
-                    );
-
-
-                    button.addEventListener(
-                        "pointercancel",
-                        () => {
-
-                            pressed =
-                                false;
-
-
-                            button.classList.remove(
-                                "pressed"
-                            );
-
-
-                            stopDrive();
-
-                        }
-                    );
+                    stopDrive();
 
                 }
             );
 
-    }
+
+            button.addEventListener(
+                "pointercancel",
+                () => {
+
+                    held =
+                        false;
 
 
-    /* =====================================================
-       ARM / CLAW
-       ===================================================== */
-
-    function setupArmClaw() {
-
-        $$(".action-button")
-            .forEach(
-                button => {
-
-                    const command =
-                        button.dataset.command;
+                    button.classList.remove(
+                        "pressed"
+                    );
 
 
-                    if (!command) {
+                    stopDrive();
 
-                        return;
+                }
+            );
+
+
+            button.addEventListener(
+                "pointerleave",
+                () => {
+
+                    if (
+                        held
+                    ) {
+
+                        held =
+                            false;
+
+
+                        button.classList.remove(
+                            "pressed"
+                        );
+
+
+                        stopDrive();
 
                     }
 
-
-                    button.addEventListener(
-                        "click",
-                        () => {
-
-                            if (
-                                !state.connected
-                            ) {
-
-                                return;
-
-                            }
-
-
-                            sendCommand(
-                                command
-                            );
-
-
-                            button.classList.add(
-                                "pressed"
-                            );
-
-
-                            setTimeout(
-                                () => {
-
-                                    button.classList.remove(
-                                        "pressed"
-                                    );
-
-                                },
-                                180
-                            );
-
-
-                            if (
-                                command ===
-                                "ARM_UP"
-                            ) {
-
-                                state.armState =
-                                    "ARM UP";
-
-                            }
-
-
-                            if (
-                                command ===
-                                "ARM_DOWN"
-                            ) {
-
-                                state.armState =
-                                    "ARM DOWN";
-
-                            }
-
-
-                            if (
-                                command ===
-                                "OPEN"
-                            ) {
-
-                                state.clawState =
-                                    "OPEN";
-
-                            }
-
-
-                            if (
-                                command ===
-                                "CLOSE"
-                            ) {
-
-                                state.clawState =
-                                    "CLOSED";
-
-                            }
-
-
-                            const arm =
-                                $("#armStatus");
-
-
-                            if (arm) {
-
-                                arm.textContent =
-                                    state.armState;
-
-                            }
-
-
-                            const claw =
-                                $("#clawStatus");
-
-
-                            if (claw) {
-
-                                claw.textContent =
-                                    state.clawState;
-
-                            }
-
-                        }
-                    );
-
                 }
             );
 
-    }
-
-
-    /* =====================================================
-       SPEED
-       ===================================================== */
-
-    function setupSpeed() {
-
-        const slider =
-            $("#speedSlider");
-
-
-        const value =
-            $("#speedValue");
-
-
-        if (!slider) {
-
-            return;
-
         }
+    );
+
+}
 
 
-        function update() {
+/* =========================================================
+   ARM & CLAW
+   ========================================================= */
 
-            state.speed =
-                Number(
-                    slider.value
-                );
+function setupArmClaw() {
 
-
-            if (value) {
-
-                value.textContent =
-                    `${state.speed}%`;
-
-            }
-
-        }
-
-
-        slider.addEventListener(
-            "input",
-            update
-        );
-
-
-        update();
-
-    }
-
-
-    /* =====================================================
-       SETTINGS NAVIGATION
-       ===================================================== */
-
-    function setupSettingsNavigation() {
-
-        const settingsButton =
-            $("#settingsButton");
-
-
-        const settingsPage =
-            $("#settingsPage");
-
-
-        const controlPage =
-            $("#controlPage");
-
-
-        const backButton =
-            $("#settingsBackButton");
-
-
-        settingsButton?.addEventListener(
-            "click",
-            () => {
-
-                stopDrive();
-
-
-                if (controlPage) {
-
-                    controlPage.style.display =
-                        "none";
-
-                }
-
-
-                if (settingsPage) {
-
-                    settingsPage.style.display =
-                        "block";
-
-                }
-
-
-                /*
-                 * IMPORTANT:
-                 * Create the ESP32 card
-                 * when Settings is opened.
-                 */
-
-                createESP32SettingsCard();
-
-            }
-        );
-
-
-        backButton?.addEventListener(
-            "click",
-            () => {
-
-                if (settingsPage) {
-
-                    settingsPage.style.display =
-                        "none";
-
-                }
-
-
-                if (controlPage) {
-
-                    controlPage.style.display =
-                        "";
-
-                }
-
-            }
-        );
-
-
-        /*
-         * Create immediately too,
-         * so it exists even if Settings
-         * starts open.
-         */
-
-        createESP32SettingsCard();
-
-    }
-
-
-    /* =====================================================
-       KEYBOARD
-       ===================================================== */
-
-    function setupKeyboard() {
-
-        const keys = {
-
-            ArrowUp:
-                "FORWARD",
-
-            ArrowDown:
-                "BACKWARD",
-
-            ArrowLeft:
-                "LEFT",
-
-            ArrowRight:
-                "RIGHT"
-
-        };
-
-
-        document.addEventListener(
-            "keydown",
-            event => {
+    $$(".action-button")
+        .forEach(
+            button => {
 
                 const command =
-                    keys[event.key];
+                    button.dataset.command;
 
 
                 if (!command) {
@@ -2539,110 +1896,418 @@
                 }
 
 
-                const active =
-                    document.activeElement;
+                button.addEventListener(
+                    "click",
+                    event => {
+
+                        event.preventDefault();
 
 
-                if (
-                    active &&
-                    (
-                        active.tagName ===
-                            "INPUT" ||
+                        if (
+                            !RIK.connected
+                        ) {
 
-                        active.tagName ===
-                            "TEXTAREA"
-                    )
-                ) {
+                            return;
 
-                    return;
-
-                }
+                        }
 
 
-                if (
-                    event.repeat
-                ) {
-
-                    return;
-
-                }
+                        sendCommand(
+                            command
+                        );
 
 
-                event.preventDefault();
+                        button.classList.add(
+                            "pressed"
+                        );
 
 
-                startDrive(
-                    command
+                        setTimeout(
+                            () => {
+
+                                button.classList.remove(
+                                    "pressed"
+                                );
+
+                            },
+                            180
+                        );
+
+
+                        updateArmClawState(
+                            command
+                        );
+
+                    }
                 );
 
             }
         );
 
+}
 
-        document.addEventListener(
-            "keyup",
-            event => {
 
-                if (
-                    keys[event.key]
-                ) {
+function updateArmClawState(
+    command
+) {
 
-                    event.preventDefault();
+    if (
+        command ===
+        "ARM_UP"
+    ) {
 
-                    stopDrive();
-
-                }
-
-            }
-        );
+        RIK.armState =
+            "ARM UP";
 
     }
 
 
-    /* =====================================================
-       SAFETY
-       ===================================================== */
+    if (
+        command ===
+        "ARM_DOWN"
+    ) {
 
-    function setupSafety() {
+        RIK.armState =
+            "ARM DOWN";
 
-        window.addEventListener(
-            "blur",
-            () => {
+    }
+
+
+    if (
+        command ===
+        "OPEN"
+    ) {
+
+        RIK.clawState =
+            "OPEN";
+
+    }
+
+
+    if (
+        command ===
+        "CLOSE"
+    ) {
+
+        RIK.clawState =
+            "CLOSED";
+
+    }
+
+
+    const arm =
+        $("#armPosition");
+
+
+    if (arm) {
+
+        arm.textContent =
+            RIK.armState;
+
+    }
+
+
+    const claw =
+        $("#clawPosition");
+
+
+    if (claw) {
+
+        claw.textContent =
+            RIK.clawState;
+
+    }
+
+}
+
+
+/* =========================================================
+   SPEED
+   ========================================================= */
+
+function setupSpeed() {
+
+    const slider =
+        $("#speedSlider");
+
+
+    const value =
+        $("#speedValue");
+
+
+    if (!slider) {
+
+        return;
+
+    }
+
+
+    RIK.speed =
+        Number(
+            slider.value
+        ) || 65;
+
+
+    function update() {
+
+        RIK.speed =
+            Number(
+                slider.value
+            );
+
+
+        if (value) {
+
+            value.textContent =
+                `${RIK.speed}%`;
+
+        }
+
+    }
+
+
+    slider.addEventListener(
+        "input",
+        update
+    );
+
+
+    update();
+
+}
+
+
+/* =========================================================
+   KEYBOARD CONTROL
+   ========================================================= */
+
+function setupKeyboard() {
+
+    const commands = {
+
+        ArrowUp:
+            "FORWARD",
+
+        ArrowDown:
+            "BACKWARD",
+
+        ArrowLeft:
+            "LEFT",
+
+        ArrowRight:
+            "RIGHT"
+
+    };
+
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            const command =
+                commands[
+                    event.key
+                ];
+
+
+            if (!command) {
+
+                return;
+
+            }
+
+
+            const active =
+                document.activeElement;
+
+
+            if (
+                active &&
+                (
+                    active.tagName ===
+                        "INPUT" ||
+
+                    active.tagName ===
+                        "TEXTAREA"
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            if (
+                event.repeat
+            ) {
+
+                return;
+
+            }
+
+
+            event.preventDefault();
+
+
+            startDrive(
+                command
+            );
+
+        }
+    );
+
+
+    document.addEventListener(
+        "keyup",
+        event => {
+
+            if (
+                commands[
+                    event.key
+                ]
+            ) {
+
+                event.preventDefault();
+
 
                 stopDrive();
 
             }
-        );
+
+        }
+    );
+
+}
 
 
-        document.addEventListener(
-            "visibilitychange",
-            () => {
+/* =========================================================
+   SAFETY
+   ========================================================= */
 
-                if (
-                    document.hidden
-                ) {
+function setupSafety() {
 
-                    stopDrive();
+    window.addEventListener(
+        "blur",
+        () => {
 
-                }
+            stopDrive();
+
+        }
+    );
+
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+
+            RIK.pageHidden =
+                document.hidden;
+
+
+            if (
+                document.hidden
+            ) {
+
+                stopDrive();
 
             }
-        );
+
+        }
+    );
 
 
-        document.addEventListener(
-            "keydown",
-            event => {
+    document.addEventListener(
+        "keydown",
+        event => {
 
-                if (
-                    event.key ===
-                    "Escape"
-                ) {
+            if (
+                event.key ===
+                "Escape"
+            ) {
 
-                    stopDrive();
+                stopDrive();
 
-                }
+            }
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   TIMER
+   ========================================================= */
+
+function setupTimer() {
+
+    const timerButton =
+        $("#timerButton");
+
+
+    const overlay =
+        $("#timerOverlay");
+
+
+    const close =
+        $("#closeTimer");
+
+
+    const start =
+        $("#startTimer");
+
+
+    const reset =
+        $("#resetTimer");
+
+
+    const minutes =
+        $("#timerMinutes");
+
+
+    const seconds =
+        $("#timerSeconds");
+
+
+    const display =
+        $("#timerDisplay");
+
+
+    function render() {
+
+        const mins =
+            Math.floor(
+                RIK.timerSeconds /
+                60
+            );
+
+
+        const secs =
+            RIK.timerSeconds %
+            60;
+
+
+        const formatted =
+            `${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}`;
+
+
+        if (display) {
+
+            display.textContent =
+                formatted;
+
+        }
+
+
+        const displays =
+            $$(".timer-value");
+
+
+        displays.forEach(
+            element => {
+
+                element.textContent =
+                    formatted;
 
             }
         );
@@ -2650,199 +2315,1064 @@
     }
 
 
-    /* =====================================================
-       BACKGROUND PERFORMANCE
-       ===================================================== */
+    timerButton?.addEventListener(
+        "click",
+        () => {
 
-    function setupBackgroundPerformance() {
+            overlay?.classList.add(
+                "show"
+            );
 
-        /*
-         * Pause expensive animated
-         * background work when the tab
-         * is not visible.
-         */
+        }
+    );
 
-        document.addEventListener(
-            "visibilitychange",
-            () => {
 
-                if (
-                    document.hidden
-                ) {
+    close?.addEventListener(
+        "click",
+        () => {
 
-                    document.body.classList.add(
-                        "rik-tab-hidden"
-                    );
+            overlay?.classList.remove(
+                "show"
+            );
 
-                } else {
+        }
+    );
 
-                    document.body.classList.remove(
-                        "rik-tab-hidden"
-                    );
 
-                }
+    overlay?.addEventListener(
+        "click",
+        event => {
+
+            if (
+                event.target ===
+                overlay
+            ) {
+
+                overlay.classList.remove(
+                    "show"
+                );
 
             }
-        );
+
+        }
+    );
+
+
+    start?.addEventListener(
+        "click",
+        () => {
+
+            const mins =
+                Math.max(
+                    0,
+                    Number(
+                        minutes?.value
+                    ) || 0
+                );
+
+
+            const secs =
+                Math.max(
+                    0,
+                    Math.min(
+                        59,
+                        Number(
+                            seconds?.value
+                        ) || 0
+                    )
+                );
+
+
+            RIK.timerSeconds =
+                mins * 60 +
+                secs;
+
+
+            if (
+                RIK.timerSeconds <=
+                0
+            ) {
+
+                return;
+
+            }
+
+
+            clearInterval(
+                RIK.timerInterval
+            );
+
+
+            render();
+
+
+            overlay?.classList.remove(
+                "show"
+            );
+
+
+            RIK.timerInterval =
+                setInterval(
+                    () => {
+
+                        RIK.timerSeconds--;
+
+
+                        render();
+
+
+                        if (
+                            RIK.timerSeconds <=
+                            0
+                        ) {
+
+                            clearInterval(
+                                RIK.timerInterval
+                            );
+
+
+                            RIK.timerInterval =
+                                null;
+
+
+                            timerFinished();
+
+                        }
+
+                    },
+                    1000
+                );
+
+        }
+    );
+
+
+    reset?.addEventListener(
+        "click",
+        () => {
+
+            clearInterval(
+                RIK.timerInterval
+            );
+
+
+            RIK.timerInterval =
+                null;
+
+
+            RIK.timerSeconds =
+                0;
+
+
+            render();
+
+        }
+    );
+
+
+    render();
+
+}
+
+
+function timerFinished() {
+
+    /*
+     * Stop robot when timer finishes.
+     */
+
+    stopDrive();
+
+
+    /*
+     * Browser notification/sound can
+     * be added later.
+     */
+
+    console.log(
+        "RIK: TIMER FINISHED"
+    );
+
+}
+
+
+/* =========================================================
+   PEARL BUTTON EFFECT
+   ---------------------------------------------------------
+   Keeps existing buttons and upgrades them.
+   ========================================================= */
+
+function setupPearlButtons() {
+
+    if (
+        $("#rik-pearl-style")
+    ) {
+
+        return;
 
     }
 
 
-    /* =====================================================
-       INIT
-       ===================================================== */
-
-    function init() {
-
-        console.log(
-            "=============================="
+    const style =
+        document.createElement(
+            "style"
         );
 
 
-        console.log(
-            "RIK ROBOT IN KONTROL"
+    style.id =
+        "rik-pearl-style";
+
+
+    style.textContent = `
+
+        .control-button,
+        .movement-button,
+        .action-button {
+
+            position: relative;
+
+            overflow: hidden;
+
+            isolation: isolate;
+
+            cursor: pointer;
+
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease,
+                filter .18s ease;
+
+        }
+
+
+        .control-button::before,
+        .movement-button::before,
+        .action-button::before {
+
+            content: "";
+
+            position: absolute;
+
+            left: 6%;
+
+            right: 6%;
+
+            top: 8%;
+
+            height: 42%;
+
+            border-radius:
+                999px 999px 35% 35%;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(255,255,255,.42),
+                    rgba(255,255,255,.08),
+                    transparent
+                );
+
+            pointer-events: none;
+
+            z-index: -1;
+
+            transition:
+                transform .25s ease,
+                opacity .25s ease;
+
+        }
+
+
+        .control-button::after,
+        .movement-button::after,
+        .action-button::after {
+
+            content: "";
+
+            position: absolute;
+
+            width: 130%;
+
+            height: 100%;
+
+            left: -15%;
+
+            bottom: -65%;
+
+            border-radius: 50%;
+
+            background:
+                rgba(255,255,255,.09);
+
+            pointer-events: none;
+
+            z-index: -1;
+
+            transition:
+                transform .3s ease;
+
+        }
+
+
+        .control-button:hover,
+        .movement-button:hover,
+        .action-button:hover {
+
+            transform:
+                translateY(-2px);
+
+            filter:
+                brightness(1.08);
+
+        }
+
+
+        .control-button:hover::before,
+        .movement-button:hover::before,
+        .action-button:hover::before {
+
+            transform:
+                translateY(-6%);
+
+        }
+
+
+        .control-button:hover::after,
+        .movement-button:hover::after,
+        .action-button:hover::after {
+
+            transform:
+                translateY(-7%);
+
+        }
+
+
+        .control-button:active,
+        .movement-button:active,
+        .action-button:active,
+        .control-button.pressed,
+        .movement-button.pressed,
+        .action-button.pressed,
+        .command-active {
+
+            transform:
+                translateY(3px)
+                scale(.985);
+
+            filter:
+                brightness(1.18);
+
+        }
+
+
+        .control-button.pressed::before,
+        .movement-button.pressed::before,
+        .action-button.pressed::before {
+
+            opacity:
+                .65;
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+/* =========================================================
+   ANIMATED BENDING BACKGROUND
+   ---------------------------------------------------------
+   IMPORTANT:
+   This is the background we were building.
+
+   It uses ONE SVG with multiple paths instead of
+   dozens of DOM elements.
+
+   This keeps the animation lightweight.
+   ========================================================= */
+
+function createAnimatedBackground() {
+
+    /*
+     * Don't duplicate it.
+     */
+
+    if (
+        $("#rikFlowBackground")
+    ) {
+
+        return;
+
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
         );
 
 
-        console.log(
-            "Initializing..."
-        );
+    style.textContent = `
+
+        #rikFlowBackground {
+
+            position:
+                fixed;
+
+            inset:
+                0;
+
+            width:
+                100%;
+
+            height:
+                100%;
+
+            z-index:
+                0;
+
+            pointer-events:
+                none;
+
+            overflow:
+                hidden;
+
+            background:
+                #000;
+
+        }
 
 
-        console.log(
-            "=============================="
-        );
+        #rikFlowBackground svg {
+
+            position:
+                absolute;
+
+            width:
+                125%;
+
+            height:
+                125%;
+
+            left:
+                -12.5%;
+
+            top:
+                -12.5%;
+
+            overflow:
+                visible;
+
+        }
 
 
-        /*
-         * IMPORTANT:
-         * Build ESP32 Settings UI.
-         */
+        #rikFlowBackground
+        .flow-line {
 
-        createESP32SettingsCard();
+            fill:
+                none;
 
+            stroke:
+                rgba(180,190,205,.28);
 
-        setupSettingsNavigation();
+            stroke-width:
+                0.8;
 
+            vector-effect:
+                non-scaling-stroke;
 
-        setupMovementButtons();
+            stroke-linecap:
+                round;
 
+            stroke-dasharray:
+                900 1400;
 
-        setupArmClaw();
+            animation:
+                rikFlow
+                18s
+                linear
+                infinite;
 
+            will-change:
+                stroke-dashoffset;
 
-        setupSpeed();
-
-
-        setupKeyboard();
-
-
-        setupSafety();
-
-
-        setupBackgroundPerformance();
-
-
-        /*
-         * Initial connection state.
-         */
-
-        state.connected =
-            false;
+        }
 
 
-        updateConnectionUI();
+        #rikFlowBackground
+        .flow-line:nth-child(2n) {
+
+            animation-duration:
+                22s;
+
+        }
 
 
-        /*
-         * Automatically connect
-         * to saved IP.
-         */
+        #rikFlowBackground
+        .flow-line:nth-child(3n) {
 
-        const settings =
-            getESP32Settings();
+            animation-duration:
+                27s;
 
-
-        if (
-            settings.ip
-        ) {
-
-            console.log(
-                "[RIK] Saved ESP32:",
-                `${settings.ip}:${settings.port}`
-            );
+        }
 
 
-            connectESP32();
+        #rikFlowBackground
+        .flow-line:nth-child(4n) {
 
-        } else {
+            animation-duration:
+                31s;
 
-            console.log(
-                "[RIK] No ESP32 IP configured."
-            );
+        }
 
 
-            setESP32Status(
-                "ENTER ESP32 IP",
-                "offline"
-            );
+        #rikFlowBackground
+        .flow-line.bright {
+
+            stroke:
+                rgba(220,225,235,.45);
+
+            stroke-width:
+                1;
+
+        }
+
+
+        @keyframes rikFlow {
+
+            from {
+
+                stroke-dashoffset:
+                    0;
+
+            }
+
+            to {
+
+                stroke-dashoffset:
+                    -2300px;
+
+            }
 
         }
 
 
         /*
-         * Public API.
+         * When tab is hidden:
+         * remove animation work.
          */
 
-        window.RIK = {
+        body.rik-tab-hidden
+        #rikFlowBackground
+        .flow-line {
 
-            state,
+            animation-play-state:
+                paused;
 
-            connectESP32,
-
-            disconnectESP32,
-
-            sendCommand,
-
-            stopDrive,
-
-            getESP32Settings,
-
-            saveESP32Settings,
-
-            getESP32URL
-
-        };
+        }
 
 
-        console.log(
-            "[RIK] READY"
+        /*
+         * Make sure your actual UI
+         * remains ABOVE the lines.
+         */
+
+        body > *:not(#rikFlowBackground) {
+
+            position:
+                relative;
+
+            z-index:
+                1;
+
+        }
+
+
+        /*
+         * Existing main containers
+         * should stay above background.
+         */
+
+        main,
+        #app,
+        #root,
+        .app,
+        .page,
+        .dashboard,
+        .controller,
+        .settings-page,
+        #controlPage,
+        #settingsPage {
+
+            position:
+                relative;
+
+            z-index:
+                1;
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+
+    const background =
+        document.createElement(
+            "div"
         );
+
+
+    background.id =
+        "rikFlowBackground";
+
+
+    /*
+     * Large curved/bending paths.
+     *
+     * These intentionally bend toward
+     * the controller area instead of
+     * simply moving horizontally.
+     */
+
+    const paths = [
+
+        "M -300 80 C 80 40, 260 70, 430 180 S 780 410, 1450 360",
+
+        "M -300 110 C 60 70, 250 100, 440 210 S 800 440, 1450 390",
+
+        "M -300 145 C 40 105, 230 135, 450 245 S 810 470, 1450 425",
+
+        "M -300 180 C 30 145, 210 170, 460 280 S 820 500, 1450 460",
+
+        "M -300 220 C 40 180, 210 205, 470 315 S 830 530, 1450 500",
+
+        "M -300 265 C 60 220, 220 245, 480 350 S 850 560, 1450 535",
+
+        "M -300 315 C 80 260, 230 290, 490 390 S 870 590, 1450 570",
+
+        "M -300 370 C 90 310, 240 340, 500 430 S 890 620, 1450 610",
+
+        "M -300 430 C 100 370, 250 395, 510 470 S 910 655, 1450 650",
+
+        "M -300 495 C 110 430, 260 455, 520 515 S 930 690, 1450 695",
+
+        "M -300 560 C 120 495, 270 515, 530 560 S 950 720, 1450 740",
+
+        "M -300 630 C 120 555, 280 575, 540 610 S 970 750, 1450 790",
+
+        "M -300 705 C 130 620, 290 640, 550 665 S 990 785, 1450 835",
+
+        "M -300 780 C 140 690, 300 710, 560 720 S 1010 820, 1450 880",
+
+        "M -300 855 C 150 760, 310 780, 570 780 S 1030 860, 1450 925",
+
+        "M -300 930 C 160 830, 320 850, 580 840 S 1050 900, 1450 970"
+
+    ];
+
+
+    const svg =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg"
+        );
+
+
+    svg.setAttribute(
+        "viewBox",
+        "0 0 1400 1000"
+    );
+
+
+    svg.setAttribute(
+        "preserveAspectRatio",
+        "none"
+    );
+
+
+    paths.forEach(
+        (d, index) => {
+
+            const path =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "path"
+                );
+
+
+            path.setAttribute(
+                "d",
+                d
+            );
+
+
+            path.classList.add(
+                "flow-line"
+            );
+
+
+            if (
+                index === 0 ||
+                index === 7 ||
+                index === 14
+            ) {
+
+                path.classList.add(
+                    "bright"
+                );
+
+            }
+
+
+            /*
+             * Slightly different
+             * starting positions.
+             */
+
+            path.style.animationDelay =
+                `${-index * 1.25}s`;
+
+
+            svg.appendChild(
+                path
+            );
+
+        }
+    );
+
+
+    background.appendChild(
+        svg
+    );
+
+
+    /*
+     * Put background FIRST so all
+     * controls remain above it.
+     */
+
+    document.body.prepend(
+        background
+    );
+
+}
+
+
+/* =========================================================
+   SETTINGS NAVIGATION
+   ========================================================= */
+
+function setupSettingsNavigation() {
+
+    const settingsButton =
+        $("#settingsButton");
+
+
+    const settingsPage =
+        $("#settingsPage");
+
+
+    const controlPage =
+        $("#controlPage");
+
+
+    const backButton =
+        $("#settingsBackButton");
+
+
+    settingsButton?.addEventListener(
+        "click",
+        () => {
+
+            stopDrive();
+
+
+            if (controlPage) {
+
+                controlPage.style.display =
+                    "none";
+
+            }
+
+
+            if (settingsPage) {
+
+                settingsPage.style.display =
+                    "";
+
+            }
+
+
+            createESP32Settings();
+
+        }
+    );
+
+
+    backButton?.addEventListener(
+        "click",
+        () => {
+
+            if (settingsPage) {
+
+                settingsPage.style.display =
+                    "none";
+
+            }
+
+
+            if (controlPage) {
+
+                controlPage.style.display =
+                    "";
+
+            }
+
+        }
+    );
+
+
+    /*
+     * If Settings already starts
+     * visible, create the card now.
+     */
+
+    if (
+        settingsPage &&
+        getComputedStyle(
+            settingsPage
+        ).display !==
+            "none"
+    ) {
+
+        createESP32Settings();
 
     }
 
+}
 
-    /* =====================================================
-       START
-       ===================================================== */
+
+/* =========================================================
+   PERFORMANCE
+   ========================================================= */
+
+function setupPerformance() {
+
+    /*
+     * Pause background animation
+     * when browser tab isn't visible.
+     */
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+
+            RIK.pageHidden =
+                document.hidden;
+
+
+            document.body.classList.toggle(
+                "rik-tab-hidden",
+                document.hidden
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   INITIALIZE
+   ========================================================= */
+
+function initRIK() {
+
+    console.log(
+        "================================="
+    );
+
+
+    console.log(
+        "RIK — ROBOT IN KONTROL"
+    );
+
+
+    console.log(
+        "Initializing..."
+    );
+
+
+    console.log(
+        "================================="
+    );
+
+
+    /*
+     * BACKGROUND FIRST.
+     *
+     * This restores the flowing
+     * bending lines.
+     */
+
+    createAnimatedBackground();
+
+
+    /*
+     * Pearl effects.
+     */
+
+    setupPearlButtons();
+
+
+    /*
+     * Controls.
+     */
+
+    setupMovementButtons();
+
+    setupArmClaw();
+
+    setupSpeed();
+
+    setupKeyboard();
+
+
+    /*
+     * Safety.
+     */
+
+    setupSafety();
+
+
+    /*
+     * Timer.
+     */
+
+    setupTimer();
+
+
+    /*
+     * Settings.
+     */
+
+    createESP32Settings();
+
+    setupSettingsNavigation();
+
+
+    /*
+     * Performance.
+     */
+
+    setupPerformance();
+
+
+    /*
+     * Initial connection state.
+     */
+
+    RIK.connected =
+        false;
+
+
+    updateConnectionUI();
+
+
+    /*
+     * Connect automatically if
+     * an ESP32 IP was already saved.
+     */
+
+    const settings =
+        getESP32Settings();
+
 
     if (
-        document.readyState ===
-        "loading"
+        settings.ip
     ) {
 
-        document.addEventListener(
-            "DOMContentLoaded",
-            init,
-            {
-                once: true
-            }
+        console.log(
+            "RIK: Saved ESP32:",
+            `${settings.ip}:${settings.port}`
         );
+
+
+        connectESP32();
 
     } else {
 
-        init();
+        console.log(
+            "RIK: No ESP32 IP configured."
+        );
 
     }
 
-})();
+
+    /*
+     * Expose useful functions
+     * for debugging.
+     */
+
+    window.RIK = {
+
+        state:
+            RIK,
+
+        connectESP32,
+
+        disconnectESP32,
+
+        sendCommand,
+
+        startDrive,
+
+        stopDrive,
+
+        getESP32Settings,
+
+        saveESP32Settings,
+
+        getESP32URL
+
+    };
+
+
+    console.log(
+        "RIK: READY"
+    );
+
+}
+
+
+/* =========================================================
+   START
+   ========================================================= */
+
+if (
+    document.readyState ===
+    "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        initRIK,
+        {
+            once: true
+        }
+    );
+
+} else {
+
+    initRIK();
+
+}
