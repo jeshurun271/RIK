@@ -1,29 +1,35 @@
-/* =========================================================
-   RIK — ROBOT IN KONTROL
-   FULL APP.JS
-   ---------------------------------------------------------
-   Includes:
-   - Animated bending background lines
-   - Performance-friendly SVG animation
-   - Pearl-style buttons
-   - Movement controls
-   - Arm & claw controls
-   - Speed control
-   - Timer
-   - ESP32 IP settings
-   - WebSocket communication
-   - Reconnection
-   - Telemetry
-   - Keyboard controls
-   - Safety stop
-   ========================================================= */
-
 "use strict";
 
+/* ============================================================
+   RIK — ROBOT IN KONTROL
+   FULL APP.JS
 
-/* =========================================================
+   INCLUDED:
+   ------------------------------------------------------------
+   ✓ Animated bending background lines
+   ✓ Performance-friendly line animation
+   ✓ Pearl-style movement buttons
+   ✓ Pearl-style ARM + CLAW buttons
+   ✓ Haptic feedback
+   ✓ Haptic Settings toggle
+   ✓ Self-adjusting movement controls
+   ✓ Button-size setting
+   ✓ Responsive / orientation adjustment
+   ✓ ESP32 IP + WebSocket port
+   ✓ WebSocket connection / reconnect
+   ✓ Telemetry
+   ✓ Keyboard controls
+   ✓ Safety STOP
+   ✓ Speed control
+   ✓ Timer
+   ✓ Settings navigation
+   ✓ Ambient-motion toggle
+   ============================================================ */
+
+
+/* ============================================================
    GLOBAL STATE
-   ========================================================= */
+   ============================================================ */
 
 const RIK = {
 
@@ -47,38 +53,52 @@ const RIK = {
 
     clawState: "READY",
 
+    commandId: 0,
+
     timerSeconds: 0,
 
     timerInterval: null,
 
-    commandId: 0,
+    hapticsEnabled: true,
+
+    ambientMotion: true,
+
+    buttonScale: 1,
+
+    hapticTimer: null,
 
     pageHidden: false,
 
-    backgroundAnimation: true
+    resizeTimer: null
 
 };
 
 
-/* =========================================================
+/* ============================================================
    STORAGE
-   ========================================================= */
+   ============================================================ */
 
 const STORAGE = {
 
     ip: "rik_esp32_ip",
 
-    port: "rik_esp32_port"
+    port: "rik_esp32_port",
+
+    haptics: "rik_haptics_enabled",
+
+    ambient: "rik_ambient_motion",
+
+    buttonSize: "rik_button_size"
 
 };
 
 
-const DEFAULT_ESP32_PORT = 81;
+const DEFAULT_PORT = 81;
 
 
-/* =========================================================
+/* ============================================================
    DOM HELPERS
-   ========================================================= */
+   ============================================================ */
 
 function $(selector, parent = document) {
 
@@ -96,24 +116,111 @@ function $$(selector, parent = document) {
 }
 
 
-/* =========================================================
+/* ============================================================
+   SAFE LOCAL STORAGE
+   ============================================================ */
+
+function storageGet(key, fallback = null) {
+
+    try {
+
+        const value =
+            localStorage.getItem(key);
+
+        return value === null
+            ? fallback
+            : value;
+
+    } catch (_) {
+
+        return fallback;
+
+    }
+
+}
+
+
+function storageSet(key, value) {
+
+    try {
+
+        localStorage.setItem(
+            key,
+            String(value)
+        );
+
+    } catch (_) {}
+
+}
+
+
+/* ============================================================
+   LOAD SETTINGS
+   ============================================================ */
+
+function loadRIKSettings() {
+
+    const haptics =
+        storageGet(
+            STORAGE.haptics,
+            "true"
+        );
+
+    const ambient =
+        storageGet(
+            STORAGE.ambient,
+            "true"
+        );
+
+    const buttonSize =
+        Number(
+            storageGet(
+                STORAGE.buttonSize,
+                "100"
+            )
+        );
+
+
+    RIK.hapticsEnabled =
+        haptics !== "false";
+
+
+    RIK.ambientMotion =
+        ambient !== "false";
+
+
+    RIK.buttonScale =
+        Number.isFinite(buttonSize)
+            ? Math.max(
+                0.8,
+                Math.min(
+                    1.3,
+                    buttonSize / 100
+                )
+            )
+            : 1;
+
+}
+
+
+/* ============================================================
    ESP32 SETTINGS
-   ========================================================= */
+   ============================================================ */
 
 function getESP32Settings() {
 
     return {
 
         ip:
-            localStorage.getItem(
-                STORAGE.ip
-            ) || "",
+            storageGet(
+                STORAGE.ip,
+                ""
+            ),
 
         port:
-            localStorage.getItem(
-                STORAGE.port
-            ) || String(
-                DEFAULT_ESP32_PORT
+            storageGet(
+                STORAGE.port,
+                String(DEFAULT_PORT)
             )
 
     };
@@ -121,16 +228,20 @@ function getESP32Settings() {
 }
 
 
-function saveESP32Settings(ip, port) {
+function saveESP32Settings(
+    ip,
+    port
+) {
 
     ip =
-        String(ip || "")
-            .trim();
+        String(
+            ip || ""
+        ).trim();
+
 
     port =
         String(
-            port ||
-            DEFAULT_ESP32_PORT
+            port || DEFAULT_PORT
         ).trim();
 
 
@@ -141,15 +252,32 @@ function saveESP32Settings(ip, port) {
     }
 
 
-    localStorage.setItem(
+    const numericPort =
+        Number(port);
+
+
+    if (
+        !Number.isInteger(
+            numericPort
+        ) ||
+        numericPort < 1 ||
+        numericPort > 65535
+    ) {
+
+        return false;
+
+    }
+
+
+    storageSet(
         STORAGE.ip,
         ip
     );
 
 
-    localStorage.setItem(
+    storageSet(
         STORAGE.port,
-        port
+        numericPort
     );
 
 
@@ -181,9 +309,133 @@ function getESP32URL() {
 }
 
 
-/* =========================================================
-   CONNECTION STATUS UI
-   ========================================================= */
+/* ============================================================
+   HAPTIC FEEDBACK
+   ============================================================ */
+
+function canVibrate() {
+
+    return (
+        "vibrate" in navigator
+    );
+
+}
+
+
+function hapticPulse(
+    pattern = 18
+) {
+
+    if (
+        !RIK.hapticsEnabled
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        !canVibrate()
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        navigator.vibrate(
+            pattern
+        );
+
+    } catch (_) {}
+
+}
+
+
+function startHaptics() {
+
+    if (
+        !RIK.hapticsEnabled
+    ) {
+
+        return;
+
+    }
+
+
+    hapticPulse(16);
+
+
+    stopHaptics();
+
+
+    /*
+     * Small repeating pulse while
+     * a movement button is held.
+     *
+     * This is intentionally slow so
+     * it does not waste battery or
+     * overwhelm the device.
+     */
+
+    RIK.hapticTimer =
+        setInterval(
+            () => {
+
+                if (
+                    RIK.hapticsEnabled &&
+                    RIK.driveCommand
+                ) {
+
+                    hapticPulse(10);
+
+                }
+
+            },
+            140
+        );
+
+}
+
+
+function stopHaptics() {
+
+    if (
+        RIK.hapticTimer
+    ) {
+
+        clearInterval(
+            RIK.hapticTimer
+        );
+
+
+        RIK.hapticTimer =
+            null;
+
+    }
+
+
+    if (
+        canVibrate()
+    ) {
+
+        try {
+
+            navigator.vibrate(0);
+
+        } catch (_) {}
+
+    }
+
+}
+
+
+/* ============================================================
+   CONNECTION UI
+   ============================================================ */
 
 function updateConnectionUI() {
 
@@ -191,7 +443,7 @@ function updateConnectionUI() {
         RIK.connected;
 
 
-    const statusElements = [
+    const elements = [
 
         $("#connectionText"),
 
@@ -202,7 +454,7 @@ function updateConnectionUI() {
     ];
 
 
-    statusElements.forEach(
+    elements.forEach(
         element => {
 
             if (!element) {
@@ -212,24 +464,10 @@ function updateConnectionUI() {
             }
 
 
-            if (
-                element.id ===
-                "robotStatus"
-            ) {
-
-                element.textContent =
-                    connected
-                        ? "CONNECTED"
-                        : "OFFLINE";
-
-            } else {
-
-                element.textContent =
-                    connected
-                        ? "CONNECTED"
-                        : "OFFLINE";
-
-            }
+            element.textContent =
+                connected
+                    ? "CONNECTED"
+                    : "OFFLINE";
 
 
             element.classList.toggle(
@@ -283,13 +521,499 @@ function updateConnectionUI() {
 
     /*
      * Safety:
-     * If ESP32 disconnects, stop movement.
+     * Never allow movement to continue
+     * after a connection loss.
      */
 
     if (!connected) {
 
-        stopDrive(
-            false
+        stopDrive(false);
+
+    }
+
+
+    updateESP32SettingsUI();
+
+}
+
+
+/* ============================================================
+   ESP32 WEBSOCKET
+   ============================================================ */
+
+function connectESP32() {
+
+    const url =
+        getESP32URL();
+
+
+    if (!url) {
+
+        updateConnectionUI();
+
+        return;
+
+    }
+
+
+    if (
+        RIK.socket &&
+        (
+            RIK.socket.readyState ===
+                WebSocket.OPEN ||
+
+            RIK.socket.readyState ===
+                WebSocket.CONNECTING
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    console.log(
+        "RIK → ESP32:",
+        url
+    );
+
+
+    let socket;
+
+
+    try {
+
+        socket =
+            new WebSocket(
+                url
+            );
+
+    } catch (error) {
+
+        console.error(
+            "RIK WebSocket error:",
+            error
+        );
+
+
+        scheduleReconnect();
+
+        return;
+
+    }
+
+
+    RIK.socket =
+        socket;
+
+
+    socket.addEventListener(
+        "open",
+        () => {
+
+            if (
+                RIK.socket !== socket
+            ) {
+
+                return;
+
+            }
+
+
+            RIK.connected =
+                true;
+
+
+            RIK.reconnectDelay =
+                1500;
+
+
+            updateConnectionUI();
+
+            startHeartbeat();
+
+
+            sendPacket({
+
+                type:
+                    "hello",
+
+                client:
+                    "RIK",
+
+                version:
+                    1,
+
+                timestamp:
+                    Date.now()
+
+            });
+
+        }
+    );
+
+
+    socket.addEventListener(
+        "message",
+        event => {
+
+            handleESP32Message(
+                event.data
+            );
+
+        }
+    );
+
+
+    socket.addEventListener(
+        "close",
+        () => {
+
+            if (
+                RIK.socket === socket
+            ) {
+
+                RIK.socket =
+                    null;
+
+            }
+
+
+            RIK.connected =
+                false;
+
+
+            stopHeartbeat();
+
+            stopHaptics();
+
+            stopDrive(false);
+
+            updateConnectionUI();
+
+
+            scheduleReconnect();
+
+        }
+    );
+
+
+    socket.addEventListener(
+        "error",
+        error => {
+
+            console.warn(
+                "RIK ESP32 error:",
+                error
+            );
+
+
+            RIK.connected =
+                false;
+
+
+            updateConnectionUI();
+
+        }
+    );
+
+}
+
+
+function disconnectESP32() {
+
+    if (
+        RIK.reconnectTimer
+    ) {
+
+        clearTimeout(
+            RIK.reconnectTimer
+        );
+
+
+        RIK.reconnectTimer =
+            null;
+
+    }
+
+
+    stopHeartbeat();
+
+    stopHaptics();
+
+
+    if (
+        RIK.socket
+    ) {
+
+        try {
+
+            RIK.socket.close();
+
+        } catch (_) {}
+
+    }
+
+
+    RIK.socket =
+        null;
+
+
+    RIK.connected =
+        false;
+
+
+    stopDrive(false);
+
+    updateConnectionUI();
+
+}
+
+
+function scheduleReconnect() {
+
+    if (
+        RIK.reconnectTimer
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        !getESP32URL()
+    ) {
+
+        return;
+
+    }
+
+
+    RIK.reconnectTimer =
+        setTimeout(
+            () => {
+
+                RIK.reconnectTimer =
+                    null;
+
+
+                connectESP32();
+
+
+                RIK.reconnectDelay =
+                    Math.min(
+                        RIK.reconnectDelay *
+                            1.8,
+                        RIK.maxReconnectDelay
+                    );
+
+            },
+            RIK.reconnectDelay
+        );
+
+}
+
+
+function startHeartbeat() {
+
+    stopHeartbeat();
+
+
+    RIK.heartbeatTimer =
+        setInterval(
+            () => {
+
+                if (
+                    RIK.connected
+                ) {
+
+                    sendPacket({
+
+                        type:
+                            "heartbeat",
+
+                        timestamp:
+                            Date.now()
+
+                    });
+
+                }
+
+            },
+            5000
+        );
+
+}
+
+
+function stopHeartbeat() {
+
+    if (
+        RIK.heartbeatTimer
+    ) {
+
+        clearInterval(
+            RIK.heartbeatTimer
+        );
+
+
+        RIK.heartbeatTimer =
+            null;
+
+    }
+
+}
+
+
+/* ============================================================
+   SEND PACKET
+   ============================================================ */
+
+function sendPacket(
+    packet
+) {
+
+    if (
+        !RIK.socket ||
+        RIK.socket.readyState !==
+            WebSocket.OPEN
+    ) {
+
+        return false;
+
+    }
+
+
+    try {
+
+        RIK.socket.send(
+            JSON.stringify(
+                packet
+            )
+        );
+
+
+        return true;
+
+    } catch (error) {
+
+        console.warn(
+            "RIK send error:",
+            error
+        );
+
+
+        return false;
+
+    }
+
+}
+
+
+/* ============================================================
+   COMMAND PROTOCOL
+   ============================================================ */
+
+function sendCommand(
+    command
+) {
+
+    if (
+        !RIK.connected
+    ) {
+
+        return false;
+
+    }
+
+
+    RIK.commandId++;
+
+
+    return sendPacket({
+
+        type:
+            "command",
+
+        id:
+            RIK.commandId,
+
+        command,
+
+        speed:
+            RIK.speed,
+
+        timestamp:
+            Date.now()
+
+    });
+
+}
+
+
+/* ============================================================
+   ESP32 MESSAGE HANDLER
+   ============================================================ */
+
+function handleESP32Message(
+    raw
+) {
+
+    let data;
+
+
+    try {
+
+        data =
+            JSON.parse(
+                raw
+            );
+
+    } catch (_) {
+
+        console.warn(
+            "RIK: invalid ESP32 data",
+            raw
+        );
+
+        return;
+
+    }
+
+
+    if (
+        data.type ===
+        "telemetry"
+    ) {
+
+        updateTelemetry(
+            data
+        );
+
+    }
+
+
+    if (
+        data.type ===
+        "status"
+    ) {
+
+        updateTelemetry(
+            data
+        );
+
+    }
+
+
+    if (
+        data.type ===
+        "ack"
+    ) {
+
+        console.log(
+            "RIK ACK:",
+            data
         );
 
     }
@@ -297,359 +1021,1897 @@ function updateConnectionUI() {
 }
 
 
-/* =========================================================
-   ESP32 SETTINGS UI
-   ---------------------------------------------------------
-   Creates the IP input automatically.
-   ========================================================= */
+/* ============================================================
+   TELEMETRY
+   ============================================================ */
+
+function updateTelemetry(
+    data
+) {
+
+    const soil =
+        data.soil ??
+        data.soilMoisture;
+
+
+    const air =
+        data.air ??
+        data.aqi ??
+        data.mq135;
+
+
+    const rssi =
+        data.rssi;
+
+
+    if (
+        soil !== undefined
+    ) {
+
+        [
+
+            $("#soilValue"),
+
+            $("#islandSoilValue")
+
+        ].forEach(
+            element => {
+
+                if (element) {
+
+                    element.textContent =
+                        `${soil}%`;
+
+                }
+
+            }
+        );
+
+    }
+
+
+    if (
+        air !== undefined
+    ) {
+
+        [
+
+            $("#airValue"),
+
+            $("#islandAirValue")
+
+        ].forEach(
+            element => {
+
+                if (element) {
+
+                    element.textContent =
+                        air;
+
+                }
+
+            }
+        );
+
+    }
+
+
+    if (
+        rssi !== undefined
+    ) {
+
+        const signal =
+            $("#signalValue");
+
+
+        if (signal) {
+
+            signal.textContent =
+                `${rssi} dBm`;
+
+        }
+
+    }
+
+}
+
+
+/* ============================================================
+   MOVEMENT
+   ============================================================ */
+
+function startDrive(
+    command
+) {
+
+    if (
+        !RIK.connected
+    ) {
+
+        return;
+
+    }
+
+
+    RIK.driveCommand =
+        command;
+
+
+    updateDriveUI(
+        command
+    );
+
+
+    sendCommand(
+        command
+    );
+
+
+    startHaptics();
+
+}
+
+
+function stopDrive(
+    sendToESP = true
+) {
+
+    const wasMoving =
+        Boolean(
+            RIK.driveCommand
+        );
+
+
+    RIK.driveCommand =
+        null;
+
+
+    stopHaptics();
+
+
+    updateDriveUI(
+        null
+    );
+
+
+    if (
+        sendToESP &&
+        wasMoving &&
+        RIK.connected
+    ) {
+
+        sendCommand(
+            "STOP"
+        );
+
+    }
+
+}
+
+
+function updateDriveUI(
+    command
+) {
+
+    const stateElement =
+        $("#driveState");
+
+
+    if (stateElement) {
+
+        stateElement.textContent =
+            command ||
+            "STOPPED";
+
+    }
+
+
+    $$(".control-button")
+        .forEach(
+            button => {
+
+                button.classList.toggle(
+                    "command-active",
+                    Boolean(
+                        command &&
+                        button.dataset.command ===
+                            command
+                    )
+                );
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   MOVEMENT BUTTONS
+   ============================================================ */
+
+function setupMovementButtons() {
+
+    const buttons =
+        $$(".control-button");
+
+
+    buttons.forEach(
+        button => {
+
+            const command =
+                button.dataset.command;
+
+
+            if (!command) {
+
+                return;
+
+            }
+
+
+            let held =
+                false;
+
+
+            const press =
+                event => {
+
+                    event.preventDefault();
+
+
+                    if (
+                        held
+                    ) {
+
+                        return;
+
+                    }
+
+
+                    held =
+                        true;
+
+
+                    try {
+
+                        button.setPointerCapture(
+                            event.pointerId
+                        );
+
+                    } catch (_) {}
+
+
+                    button.classList.add(
+                        "pressed"
+                    );
+
+
+                    startDrive(
+                        command
+                    );
+
+                };
+
+
+            const release =
+                event => {
+
+                    if (
+                        event
+                    ) {
+
+                        event.preventDefault();
+
+                    }
+
+
+                    if (
+                        !held
+                    ) {
+
+                        return;
+
+                    }
+
+
+                    held =
+                        false;
+
+
+                    button.classList.remove(
+                        "pressed"
+                    );
+
+
+                    stopDrive();
+
+                };
+
+
+            button.addEventListener(
+                "pointerdown",
+                press
+            );
+
+
+            button.addEventListener(
+                "pointerup",
+                release
+            );
+
+
+            button.addEventListener(
+                "pointercancel",
+                release
+            );
+
+
+            button.addEventListener(
+                "lostpointercapture",
+                () => {
+
+                    if (
+                        held
+                    ) {
+
+                        release();
+
+                    }
+
+                }
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   ARM + CLAW
+   ============================================================ */
+
+function setupArmClaw() {
+
+    $$(".action-button")
+        .forEach(
+            button => {
+
+                const command =
+                    button.dataset.command;
+
+
+                if (!command) {
+
+                    return;
+
+                }
+
+
+                button.addEventListener(
+                    "click",
+                    event => {
+
+                        event.preventDefault();
+
+
+                        if (
+                            !RIK.connected
+                        ) {
+
+                            return;
+
+                        }
+
+
+                        sendCommand(
+                            command
+                        );
+
+
+                        /*
+                         * Short haptic confirmation
+                         * for ARM / CLAW.
+                         */
+
+                        hapticPulse(
+                            [12, 30, 12]
+                        );
+
+
+                        button.classList.add(
+                            "pressed"
+                        );
+
+
+                        setTimeout(
+                            () => {
+
+                                button.classList.remove(
+                                    "pressed"
+                                );
+
+                            },
+                            180
+                        );
+
+
+                        updateArmClawState(
+                            command
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+}
+
+
+function updateArmClawState(
+    command
+) {
+
+    switch (command) {
+
+        case "ARM_UP":
+
+            RIK.armState =
+                "ARM UP";
+
+            break;
+
+
+        case "ARM_DOWN":
+
+            RIK.armState =
+                "ARM DOWN";
+
+            break;
+
+
+        case "CLAW_OPEN":
+
+        case "OPEN":
+
+            RIK.clawState =
+                "OPEN";
+
+            break;
+
+
+        case "CLAW_CLOSE":
+
+        case "CLOSE":
+
+            RIK.clawState =
+                "CLOSED";
+
+            break;
+
+    }
+
+
+    const arm =
+        $("#armPosition");
+
+
+    const claw =
+        $("#clawPosition");
+
+
+    if (arm) {
+
+        arm.textContent =
+            RIK.armState;
+
+    }
+
+
+    if (claw) {
+
+        claw.textContent =
+            RIK.clawState;
+
+    }
+
+}
+
+
+/* ============================================================
+   SPEED
+   ============================================================ */
+
+function setupSpeed() {
+
+    const slider =
+        $("#speedSlider");
+
+
+    const value =
+        $("#speedValue");
+
+
+    if (!slider) {
+
+        return;
+
+    }
+
+
+    function render() {
+
+        RIK.speed =
+            Number(
+                slider.value
+            ) || 0;
+
+
+        if (value) {
+
+            value.textContent =
+                `${RIK.speed}%`;
+
+        }
+
+    }
+
+
+    slider.addEventListener(
+        "input",
+        render
+    );
+
+
+    render();
+
+}
+
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+
+function setupKeyboard() {
+
+    const commands = {
+
+        ArrowUp:
+            "FORWARD",
+
+        ArrowDown:
+            "BACKWARD",
+
+        ArrowLeft:
+            "LEFT",
+
+        ArrowRight:
+            "RIGHT"
+
+    };
+
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            const command =
+                commands[
+                    event.key
+                ];
+
+
+            if (!command) {
+
+                return;
+
+            }
+
+
+            if (
+                event.repeat
+            ) {
+
+                return;
+
+            }
+
+
+            const active =
+                document.activeElement;
+
+
+            if (
+                active &&
+                (
+                    active.tagName ===
+                        "INPUT" ||
+
+                    active.tagName ===
+                        "TEXTAREA"
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            event.preventDefault();
+
+
+            startDrive(
+                command
+            );
+
+        }
+    );
+
+
+    document.addEventListener(
+        "keyup",
+        event => {
+
+            if (
+                commands[
+                    event.key
+                ]
+            ) {
+
+                event.preventDefault();
+
+
+                stopDrive();
+
+            }
+
+        }
+    );
+
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key ===
+                "Escape"
+            ) {
+
+                stopDrive();
+
+            }
+
+        }
+    );
+
+
+    window.addEventListener(
+        "blur",
+        () => {
+
+            stopDrive();
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   PEARL BUTTON VISUAL SYSTEM
+   ============================================================ */
+
+function installPearlStyles() {
+
+    if (
+        $("#rikPearlRuntimeStyle")
+    ) {
+
+        return;
+
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+
+    style.id =
+        "rikPearlRuntimeStyle";
+
+
+    style.textContent = `
+
+        .control-button,
+        .action-button {
+
+            position: relative;
+
+            overflow: hidden;
+
+            isolation: isolate;
+
+            cursor: pointer;
+
+            -webkit-tap-highlight-color:
+                transparent;
+
+            touch-action:
+                none;
+
+            transition:
+                transform .18s ease,
+                filter .18s ease,
+                box-shadow .18s ease;
+
+        }
+
+
+        .control-button::before,
+        .action-button::before {
+
+            content: "";
+
+            position: absolute;
+
+            left: 6%;
+
+            right: 6%;
+
+            top: 7%;
+
+            height: 43%;
+
+            border-radius:
+                999px 999px 35% 35%;
+
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(255,255,255,.42),
+                    rgba(255,255,255,.10),
+                    transparent
+                );
+
+            pointer-events: none;
+
+            z-index: -1;
+
+            transition:
+                transform .28s ease,
+                opacity .28s ease;
+
+        }
+
+
+        .control-button::after,
+        .action-button::after {
+
+            content: "";
+
+            position: absolute;
+
+            left: -15%;
+
+            width: 130%;
+
+            height: 100%;
+
+            bottom: -68%;
+
+            border-radius: 50%;
+
+            background:
+                rgba(255,255,255,.10);
+
+            pointer-events: none;
+
+            z-index: -1;
+
+            transition:
+                transform .30s ease;
+
+        }
+
+
+        .control-button:hover,
+        .action-button:hover {
+
+            transform:
+                translateY(-2px);
+
+            filter:
+                brightness(1.08);
+
+        }
+
+
+        .control-button:hover::before,
+        .action-button:hover::before {
+
+            transform:
+                translateY(-7%);
+
+        }
+
+
+        .control-button:hover::after,
+        .action-button:hover::after {
+
+            transform:
+                translateY(-7%);
+
+        }
+
+
+        .control-button:active,
+        .action-button:active,
+        .control-button.pressed,
+        .action-button.pressed,
+        .control-button.command-active {
+
+            transform:
+                translateY(3px)
+                scale(.985);
+
+            filter:
+                brightness(1.18);
+
+        }
+
+
+        .control-button.pressed::before,
+        .action-button.pressed::before {
+
+            opacity:
+                .72;
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+/* ============================================================
+   ANIMATED BENDING LINES
+   ============================================================ */
+
+function installFlowBackground() {
+
+    if (
+        $("#rikFlowBackground")
+    ) {
+
+        return;
+
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+
+    style.id =
+        "rikFlowBackgroundStyle";
+
+
+    style.textContent = `
+
+        #rikFlowBackground {
+
+            position:
+                fixed;
+
+            inset:
+                0;
+
+            width:
+                100%;
+
+            height:
+                100%;
+
+            z-index:
+                0;
+
+            pointer-events:
+                none;
+
+            overflow:
+                hidden;
+
+            background:
+                #000;
+
+        }
+
+
+        #rikFlowBackground svg {
+
+            position:
+                absolute;
+
+            width:
+                125%;
+
+            height:
+                125%;
+
+            left:
+                -12.5%;
+
+            top:
+                -12.5%;
+
+            overflow:
+                visible;
+
+        }
+
+
+        #rikFlowBackground
+        .rik-flow {
+
+            fill:
+                none;
+
+            stroke:
+                rgba(190,198,212,.30);
+
+            stroke-width:
+                .8;
+
+            vector-effect:
+                non-scaling-stroke;
+
+            stroke-linecap:
+                round;
+
+            stroke-dasharray:
+                850 1450;
+
+            animation:
+                rikLineFlow
+                25s
+                linear
+                infinite;
+
+            will-change:
+                stroke-dashoffset;
+
+        }
+
+
+        #rikFlowBackground
+        .rik-flow.bright {
+
+            stroke:
+                rgba(225,230,240,.46);
+
+            stroke-width:
+                1;
+
+        }
+
+
+        #rikFlowBackground
+        .rik-flow:nth-child(2n) {
+
+            animation-duration:
+                29s;
+
+        }
+
+
+        #rikFlowBackground
+        .rik-flow:nth-child(3n) {
+
+            animation-duration:
+                34s;
+
+        }
+
+
+        #rikFlowBackground
+        .rik-flow:nth-child(4n) {
+
+            animation-duration:
+                38s;
+
+        }
+
+
+        @keyframes rikLineFlow {
+
+            from {
+
+                stroke-dashoffset:
+                    0;
+
+            }
+
+            to {
+
+                stroke-dashoffset:
+                    -2300px;
+
+            }
+
+        }
+
+
+        body.rik-tab-hidden
+        #rikFlowBackground
+        .rik-flow {
+
+            animation-play-state:
+                paused;
+
+        }
+
+
+        body.rik-no-ambient-motion
+        #rikFlowBackground
+        .rik-flow {
+
+            animation:
+                none;
+
+            stroke-dasharray:
+                none;
+
+        }
+
+
+        #rikFlowBackground + * {
+
+            position:
+                relative;
+
+            z-index:
+                1;
+
+        }
+
+
+        main,
+        header,
+        #app,
+        #root,
+        #settingsPage,
+        .app,
+        .dashboard,
+        .controller {
+
+            position:
+                relative;
+
+            z-index:
+                1;
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+
+    const background =
+        document.createElement(
+            "div"
+        );
+
+
+    background.id =
+        "rikFlowBackground";
+
+
+    const svg =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg"
+        );
+
+
+    svg.setAttribute(
+        "viewBox",
+        "0 0 1400 1000"
+    );
+
+
+    svg.setAttribute(
+        "preserveAspectRatio",
+        "none"
+    );
+
+
+    /*
+     * These bend toward the lower/right
+     * controller area rather than moving
+     * in a straight horizontal direction.
+     */
+
+    const paths = [
+
+        "M -300 80 C 80 40 260 70 430 180 S 780 410 1450 360",
+
+        "M -300 120 C 60 75 250 105 440 210 S 800 440 1450 395",
+
+        "M -300 165 C 40 115 230 140 450 245 S 810 470 1450 430",
+
+        "M -300 215 C 30 155 210 180 460 280 S 820 505 1450 470",
+
+        "M -300 270 C 60 205 220 230 480 320 S 840 545 1450 515",
+
+        "M -300 330 C 80 255 230 285 495 365 S 865 585 1450 560",
+
+        "M -300 395 C 90 310 240 345 510 415 S 890 625 1450 610",
+
+        "M -300 465 C 100 370 250 405 525 465 S 920 670 1450 660",
+
+        "M -300 540 C 110 435 260 465 540 515 S 950 710 1450 715",
+
+        "M -300 620 C 120 505 270 530 555 565 S 980 750 1450 775",
+
+        "M -300 705 C 130 580 280 600 570 620 S 1010 795 1450 840",
+
+        "M -300 790 C 140 655 290 675 585 680 S 1040 840 1450 905"
+
+    ];
+
+
+    paths.forEach(
+        (pathData, index) => {
+
+            const path =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "path"
+                );
+
+
+            path.setAttribute(
+                "d",
+                pathData
+            );
+
+
+            path.classList.add(
+                "rik-flow"
+            );
+
+
+            if (
+                index === 0 ||
+                index === 5 ||
+                index === 10
+            ) {
+
+                path.classList.add(
+                    "bright"
+                );
+
+            }
+
+
+            path.style.animationDelay =
+                `${-index * 1.7}s`;
+
+
+            svg.appendChild(
+                path
+            );
+
+        }
+    );
+
+
+    background.appendChild(
+        svg
+    );
+
+
+    document.body.prepend(
+        background
+    );
+
+
+    applyAmbientMotion();
+
+}
+
+
+/* ============================================================
+   AMBIENT MOTION
+   ============================================================ */
+
+function applyAmbientMotion() {
+
+    document.body.classList.toggle(
+        "rik-no-ambient-motion",
+        !RIK.ambientMotion
+    );
+
+}
+
+
+/* ============================================================
+   SELF-ADJUSTING SCREEN SYSTEM
+   ============================================================ */
+
+/*
+ * This is intentionally separate from the visual styling.
+ *
+ * The system measures the available viewport and dynamically
+ * scales the movement controls so they don't get clipped.
+ */
+
+function autoFitControls() {
+
+    const movementPanel =
+        $(
+            ".movement-panel, .movement-controls, .drive-panel, #movementPanel"
+        );
+
+
+    const grid =
+        $(
+            ".movement-grid, .direction-pad, .movement-pad"
+        );
+
+
+    if (
+        !movementPanel &&
+        !grid
+    ) {
+
+        return;
+
+    }
+
+
+    const target =
+        grid ||
+        movementPanel;
+
+
+    if (!target) {
+
+        return;
+
+    }
+
+
+    const rect =
+        target.getBoundingClientRect();
+
+
+    const viewportWidth =
+        window.visualViewport
+            ? window.visualViewport.width
+            : window.innerWidth;
+
+
+    const viewportHeight =
+        window.visualViewport
+            ? window.visualViewport.height
+            : window.innerHeight;
+
+
+    /*
+     * Determine available screen space.
+     */
+
+    const availableWidth =
+        Math.max(
+            240,
+            viewportWidth - 32
+        );
+
+
+    const availableHeight =
+        Math.max(
+            240,
+            viewportHeight - 180
+        );
+
+
+    /*
+     * Base scale from the available
+     * viewport.
+     */
+
+    let scale =
+        Math.min(
+            availableWidth / 520,
+            availableHeight / 440
+        );
+
+
+    /*
+     * Respect user's Button Size setting.
+     */
+
+    scale *=
+        RIK.buttonScale;
+
+
+    /*
+     * Keep everything in a useful range.
+     */
+
+    scale =
+        Math.max(
+            0.72,
+            Math.min(
+                1.28,
+                scale
+            )
+        );
+
+
+    document.documentElement
+        .style
+        .setProperty(
+            "--rik-auto-scale",
+            scale.toFixed(3)
+        );
+
+
+    /*
+     * Apply scale to the movement
+     * control system only.
+     *
+     * The rest of the UI isn't randomly
+     * resized.
+     */
+
+    document.documentElement
+        .style
+        .setProperty(
+            "--rik-control-scale",
+            scale.toFixed(3)
+        );
+
+
+    /*
+     * Update CSS custom dimensions.
+     */
+
+    const root =
+        document.documentElement;
+
+
+    root.style.setProperty(
+        "--rik-button-scale",
+        scale
+    );
+
+
+    /*
+     * Tell CSS about orientation.
+     */
+
+    const portrait =
+        viewportHeight >
+        viewportWidth;
+
+
+    document.body.classList.toggle(
+        "rik-portrait",
+        portrait
+    );
+
+
+    document.body.classList.toggle(
+        "rik-landscape",
+        !portrait
+    );
+
+}
+
+
+/* ============================================================
+   BUTTON SIZE SETTING
+   ============================================================ */
+
+function setupButtonSize() {
+
+    const slider =
+        $("#buttonSizeSlider");
+
+
+    const value =
+        $("#buttonSizeValue");
+
+
+    if (!slider) {
+
+        return;
+
+    }
+
+
+    slider.value =
+        String(
+            Math.round(
+                RIK.buttonScale *
+                100
+            )
+        );
+
+
+    function update() {
+
+        const percentage =
+            Number(
+                slider.value
+            ) || 100;
+
+
+        RIK.buttonScale =
+            Math.max(
+                .8,
+                Math.min(
+                    1.3,
+                    percentage / 100
+                )
+            );
+
+
+        storageSet(
+            STORAGE.buttonSize,
+            percentage
+        );
+
+
+        if (value) {
+
+            value.textContent =
+                `${percentage}%`;
+
+        }
+
+
+        autoFitControls();
+
+    }
+
+
+    slider.addEventListener(
+        "input",
+        update
+    );
+
+
+    update();
+
+}
+
+
+/* ============================================================
+   HAPTIC TOGGLE
+   ============================================================ */
+
+function setupHapticToggle() {
+
+    const toggle =
+        $("#hapticToggle");
+
+
+    if (!toggle) {
+
+        return;
+
+    }
+
+
+    toggle.checked =
+        RIK.hapticsEnabled;
+
+
+    toggle.addEventListener(
+        "change",
+        () => {
+
+            RIK.hapticsEnabled =
+                toggle.checked;
+
+
+            storageSet(
+                STORAGE.haptics,
+                RIK.hapticsEnabled
+            );
+
+
+            if (
+                !RIK.hapticsEnabled
+            ) {
+
+                stopHaptics();
+
+            } else {
+
+                hapticPulse(
+                    18
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   AMBIENT MOTION TOGGLE
+   ============================================================ */
+
+function setupAmbientToggle() {
+
+    const toggle =
+        $("#ambientMotionToggle");
+
+
+    if (!toggle) {
+
+        return;
+
+    }
+
+
+    toggle.checked =
+        RIK.ambientMotion;
+
+
+    toggle.addEventListener(
+        "change",
+        () => {
+
+            RIK.ambientMotion =
+                toggle.checked;
+
+
+            storageSet(
+                STORAGE.ambient,
+                RIK.ambientMotion
+            );
+
+
+            applyAmbientMotion();
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   ESP32 SETTINGS CARD
+   ============================================================ */
 
 function createESP32Settings() {
+
+    const settingsPage =
+        $("#settingsPage");
+
+
+    if (
+        !settingsPage
+    ) {
+
+        return;
+
+    }
+
 
     if (
         $("#esp32ConnectionCard")
     ) {
 
-        loadESP32Settings();
+        loadESP32SettingsUI();
 
         return;
 
     }
 
 
-    const settingsPage =
-        $(
-            "#settingsPage"
+    const style =
+        document.createElement(
+            "style"
         );
 
 
-    if (!settingsPage) {
-
-        console.warn(
-            "RIK: #settingsPage not found."
-        );
-
-        return;
-
-    }
+    style.id =
+        "rik-esp32-settings-style";
 
 
-    /*
-     * CSS for dynamically-created settings card.
-     */
+    style.textContent = `
 
-    if (
-        !$("#rik-esp32-settings-style")
-    ) {
+        #esp32ConnectionCard {
 
-        const style =
-            document.createElement(
-                "style"
-            );
+            width: 100%;
 
+            margin-bottom: 26px;
 
-        style.id =
-            "rik-esp32-settings-style";
+            padding: 24px;
 
+            box-sizing: border-box;
 
-        style.textContent = `
+            border-radius: 20px;
 
-            #esp32ConnectionCard {
+            border:
+                1px solid
+                rgba(255,255,255,.14);
 
-                width: 100%;
+            background:
+                rgba(18,18,20,.74);
 
-                margin: 0 0 26px;
+            backdrop-filter:
+                blur(22px);
 
-                padding: 24px;
+            -webkit-backdrop-filter:
+                blur(22px);
 
-                box-sizing: border-box;
+            color: white;
 
-                border-radius: 20px;
-
-                border:
-                    1px solid
-                    rgba(255,255,255,.14);
-
-                background:
-                    rgba(20,20,22,.72);
-
-                box-shadow:
-                    inset 0 1px 0
-                    rgba(255,255,255,.08),
-                    0 18px 45px
-                    rgba(0,0,0,.25);
-
-                backdrop-filter:
-                    blur(20px);
-
-                -webkit-backdrop-filter:
-                    blur(20px);
-
-                color: white;
-
-            }
+        }
 
 
-            .rik-esp32-heading {
+        .rik-esp32-heading {
 
-                display: flex;
+            display: flex;
 
-                justify-content:
-                    space-between;
+            align-items: center;
 
-                align-items:
-                    center;
+            justify-content:
+                space-between;
 
-                margin-bottom: 7px;
+            gap: 15px;
 
-            }
-
-
-            .rik-esp32-heading h3 {
-
-                margin: 0;
-
-                font-size: 14px;
-
-                font-weight: 800;
-
-                letter-spacing:
-                    .1em;
-
-            }
+        }
 
 
-            .rik-esp32-description {
+        .rik-esp32-heading h3 {
 
-                margin:
-                    0 0 20px;
+            margin: 0;
 
-                color:
-                    rgba(255,255,255,.45);
+            font-size: 14px;
 
-                font-size: 11px;
+            letter-spacing:
+                .1em;
 
-            }
+        }
 
+
+        #rikEsp32Status {
+
+            font-size: 9px;
+
+            font-weight: 800;
+
+            letter-spacing:
+                .08em;
+
+        }
+
+
+        .rik-esp32-description {
+
+            margin:
+                8px 0 20px;
+
+            font-size: 11px;
+
+            color:
+                rgba(255,255,255,.45);
+
+        }
+
+
+        .rik-esp32-fields {
+
+            display: grid;
+
+            grid-template-columns:
+                minmax(0,1fr)
+                130px;
+
+            gap: 12px;
+
+        }
+
+
+        .rik-esp32-field {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 7px;
+
+        }
+
+
+        .rik-esp32-field label {
+
+            font-size: 9px;
+
+            font-weight: 800;
+
+            color:
+                rgba(255,255,255,.45);
+
+            letter-spacing:
+                .08em;
+
+        }
+
+
+        .rik-esp32-field input {
+
+            width: 100%;
+
+            height: 44px;
+
+            box-sizing: border-box;
+
+            padding:
+                0 13px;
+
+            border-radius: 10px;
+
+            border:
+                1px solid
+                rgba(255,255,255,.14);
+
+            background:
+                rgba(255,255,255,.055);
+
+            color: white;
+
+            outline: none;
+
+        }
+
+
+        .rik-esp32-field input:focus {
+
+            border-color:
+                rgba(30,235,120,.7);
+
+        }
+
+
+        .rik-esp32-buttons {
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 9px;
+
+            margin-top: 15px;
+
+        }
+
+
+        .rik-esp32-btn {
+
+            min-height: 40px;
+
+            padding:
+                0 16px;
+
+            border-radius: 10px;
+
+            border:
+                1px solid
+                rgba(255,255,255,.14);
+
+            background:
+                rgba(255,255,255,.06);
+
+            color: white;
+
+            cursor: pointer;
+
+            font-size: 9px;
+
+            font-weight: 800;
+
+            letter-spacing:
+                .07em;
+
+        }
+
+
+        .rik-esp32-btn.primary {
+
+            color:
+                #001509;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #35f58b,
+                    #08c965
+                );
+
+        }
+
+
+        .rik-esp32-status-row {
+
+            display: flex;
+
+            justify-content:
+                space-between;
+
+            gap: 10px;
+
+            margin-top: 15px;
+
+            padding-top: 14px;
+
+            border-top:
+                1px solid
+                rgba(255,255,255,.08);
+
+            font-size: 9px;
+
+        }
+
+
+        #rikEsp32StatusMessage {
+
+            color:
+                rgba(255,255,255,.45);
+
+        }
+
+
+        #rikEsp32Address {
+
+            color:
+                rgba(255,255,255,.3);
+
+        }
+
+
+        @media(max-width:650px) {
 
             .rik-esp32-fields {
 
-                display: grid;
-
                 grid-template-columns:
-                    minmax(0,1fr)
-                    130px;
-
-                gap: 12px;
-
-                margin-bottom: 14px;
+                    1fr;
 
             }
 
+        }
 
-            .rik-esp32-field {
+    `;
 
-                display: flex;
 
-                flex-direction: column;
-
-                gap: 7px;
-
-            }
-
-
-            .rik-esp32-field label {
-
-                font-size: 9px;
-
-                font-weight: 800;
-
-                letter-spacing:
-                    .1em;
-
-                color:
-                    rgba(255,255,255,.45);
-
-            }
-
-
-            .rik-esp32-field input {
-
-                width: 100%;
-
-                height: 44px;
-
-                box-sizing: border-box;
-
-                padding:
-                    0 13px;
-
-                border-radius: 10px;
-
-                border:
-                    1px solid
-                    rgba(255,255,255,.13);
-
-                background:
-                    rgba(255,255,255,.055);
-
-                color: white;
-
-                outline: none;
-
-                font-family:
-                    inherit;
-
-            }
-
-
-            .rik-esp32-field input:focus {
-
-                border-color:
-                    rgba(30,235,120,.65);
-
-                box-shadow:
-                    0 0 0 3px
-                    rgba(30,235,120,.08);
-
-            }
-
-
-            .rik-esp32-buttons {
-
-                display: flex;
-
-                gap: 9px;
-
-                flex-wrap: wrap;
-
-            }
-
-
-            .rik-esp32-btn {
-
-                height: 40px;
-
-                padding:
-                    0 16px;
-
-                border-radius: 10px;
-
-                border:
-                    1px solid
-                    rgba(255,255,255,.13);
-
-                background:
-                    rgba(255,255,255,.06);
-
-                color: white;
-
-                font-family:
-                    inherit;
-
-                font-size: 9px;
-
-                font-weight: 800;
-
-                letter-spacing:
-                    .08em;
-
-                cursor: pointer;
-
-                transition:
-                    .18s ease;
-
-            }
-
-
-            .rik-esp32-btn:hover {
-
-                background:
-                    rgba(255,255,255,.12);
-
-                transform:
-                    translateY(-1px);
-
-            }
-
-
-            .rik-esp32-btn.primary {
-
-                color: #001509;
-
-                border-color:
-                    rgba(0,255,120,.4);
-
-                background:
-                    linear-gradient(
-                        135deg,
-                        #35f58b,
-                        #08c965
-                    );
-
-            }
-
-
-            .rik-esp32-status-row {
-
-                display: flex;
-
-                justify-content:
-                    space-between;
-
-                gap: 10px;
-
-                padding-top: 15px;
-
-                margin-top: 15px;
-
-                border-top:
-                    1px solid
-                    rgba(255,255,255,.08);
-
-            }
-
-
-            #rikEsp32Status {
-
-                font-size: 9px;
-
-                font-weight: 800;
-
-                letter-spacing:
-                    .08em;
-
-            }
-
-
-            #rikEsp32Address {
-
-                color:
-                    rgba(255,255,255,.35);
-
-                font-size: 9px;
-
-            }
-
-
-            @media(max-width:700px) {
-
-                .rik-esp32-fields {
-
-                    grid-template-columns:
-                        1fr;
-
-                }
-
-            }
-
-        `;
-
-
-        document.head.appendChild(
-            style
-        );
-
-    }
+    document.head.appendChild(
+        style
+    );
 
 
     const card =
@@ -670,10 +2932,8 @@ function createESP32Settings() {
                 ESP32 CONNECTION
             </h3>
 
-            <span
-                id="rikEsp32Status"
-            >
-                OFFLINE
+            <span id="rikEsp32Status">
+                NOT CONFIGURED
             </span>
 
         </div>
@@ -699,8 +2959,8 @@ function createESP32Settings() {
                     id="esp32IpInput"
                     type="text"
                     inputmode="decimal"
-                    placeholder="192.168.1.100"
                     autocomplete="off"
+                    placeholder="192.168.1.100"
                 >
 
             </div>
@@ -758,15 +3018,11 @@ function createESP32Settings() {
 
         <div class="rik-esp32-status-row">
 
-            <span
-                id="rikEsp32StatusMessage"
-            >
-                No ESP32 configured.
+            <span id="rikEsp32StatusMessage">
+                Enter ESP32 IP address.
             </span>
 
-            <span
-                id="rikEsp32Address"
-            >
+            <span id="rikEsp32Address">
                 —
             </span>
 
@@ -775,10 +3031,6 @@ function createESP32Settings() {
     `;
 
 
-    /*
-     * Put card near top of Settings.
-     */
-
     settingsPage.prepend(
         card
     );
@@ -786,12 +3038,12 @@ function createESP32Settings() {
 
     bindESP32Settings();
 
-    loadESP32Settings();
+    loadESP32SettingsUI();
 
 }
 
 
-function loadESP32Settings() {
+function loadESP32SettingsUI() {
 
     const settings =
         getESP32Settings();
@@ -863,6 +3115,7 @@ function updateESP32SettingsUI() {
                     ? "OFFLINE"
                     : "NOT CONFIGURED";
 
+
         status.style.color =
             RIK.connected
                 ? "#20e878"
@@ -895,34 +3148,35 @@ function bindESP32Settings() {
         $("#esp32PortInput");
 
 
-    const saveButton =
+    const save =
         $("#saveESP32Button");
 
 
-    const testButton =
+    const test =
         $("#testESP32Button");
 
 
-    const disconnectButton =
+    const disconnect =
         $("#disconnectESP32Button");
 
 
-    saveButton?.addEventListener(
+    save?.addEventListener(
         "click",
         () => {
 
-            const saved =
+            const valid =
                 saveESP32Settings(
                     ipInput?.value,
                     portInput?.value
                 );
 
 
-            if (!saved) {
+            if (!valid) {
 
                 alert(
-                    "Please enter the ESP32 IP address."
+                    "Enter a valid ESP32 IP address and port."
                 );
+
 
                 return;
 
@@ -932,62 +3186,30 @@ function bindESP32Settings() {
             disconnectESP32();
 
 
-            updateESP32SettingsUI();
-
-
             setTimeout(
                 connectESP32,
-                150
+                100
             );
 
         }
     );
 
 
-    testButton?.addEventListener(
+    test?.addEventListener(
         "click",
         () => {
 
-            const saved =
-                saveESP32Settings(
-                    ipInput?.value,
-                    portInput?.value
-                );
-
-
-            if (!saved) {
-
-                alert(
-                    "Please enter the ESP32 IP address."
-                );
-
-                return;
-
-            }
-
-
-            disconnectESP32();
-
-
-            updateESP32SettingsUI();
-
-
-            setTimeout(
-                connectESP32,
-                150
-            );
+            save?.click();
 
         }
     );
 
 
-    disconnectButton?.addEventListener(
+    disconnect?.addEventListener(
         "click",
         () => {
 
             disconnectESP32();
-
-            updateESP32SettingsUI();
 
         }
     );
@@ -998,10 +3220,11 @@ function bindESP32Settings() {
         event => {
 
             if (
-                event.key === "Enter"
+                event.key ===
+                "Enter"
             ) {
 
-                saveButton?.click();
+                save?.click();
 
             }
 
@@ -1014,10 +3237,11 @@ function bindESP32Settings() {
         event => {
 
             if (
-                event.key === "Enter"
+                event.key ===
+                "Enter"
             ) {
 
-                saveButton?.click();
+                save?.click();
 
             }
 
@@ -1027,1221 +3251,100 @@ function bindESP32Settings() {
 }
 
 
-/* =========================================================
-   ESP32 WEBSOCKET
-   ========================================================= */
+/* ============================================================
+   SETTINGS NAVIGATION
+   ============================================================ */
 
-function connectESP32() {
+function setupSettingsNavigation() {
 
-    const url =
-        getESP32URL();
+    const settingsButton =
+        $("#settingsButton");
 
 
-    if (!url) {
+    const settingsPage =
+        $("#settingsPage");
 
-        updateESP32SettingsUI();
 
-        return;
+    const controlPage =
+        $("#controlPage") ||
+        $("#app");
 
-    }
 
+    const backButton =
+        $("#settingsBackButton");
 
-    if (
-        RIK.socket &&
-        (
-            RIK.socket.readyState ===
-                WebSocket.OPEN ||
 
-            RIK.socket.readyState ===
-                WebSocket.CONNECTING
-        )
-    ) {
-
-        return;
-
-    }
-
-
-    console.log(
-        "RIK → ESP32:",
-        url
-    );
-
-
-    const socket =
-        new WebSocket(
-            url
-        );
-
-
-    RIK.socket =
-        socket;
-
-
-    socket.addEventListener(
-        "open",
-        () => {
-
-            RIK.connected =
-                true;
-
-
-            RIK.reconnectDelay =
-                1500;
-
-
-            updateConnectionUI();
-
-            updateESP32SettingsUI();
-
-
-            console.log(
-                "RIK: ESP32 CONNECTED"
-            );
-
-
-            startHeartbeat();
-
-
-            sendPacket({
-
-                type:
-                    "hello",
-
-                client:
-                    "RIK",
-
-                version:
-                    1,
-
-                timestamp:
-                    Date.now()
-
-            });
-
-        }
-    );
-
-
-    socket.addEventListener(
-        "message",
-        event => {
-
-            handleESP32Message(
-                event.data
-            );
-
-        }
-    );
-
-
-    socket.addEventListener(
-        "close",
-        () => {
-
-            if (
-                RIK.socket === socket
-            ) {
-
-                RIK.socket =
-                    null;
-
-            }
-
-
-            RIK.connected =
-                false;
-
-
-            stopHeartbeat();
-
-
-            updateConnectionUI();
-
-            updateESP32SettingsUI();
-
-
-            scheduleReconnect();
-
-        }
-    );
-
-
-    socket.addEventListener(
-        "error",
-        error => {
-
-            console.warn(
-                "RIK ESP32 WebSocket error:",
-                error
-            );
-
-
-            RIK.connected =
-                false;
-
-
-            updateConnectionUI();
-
-            updateESP32SettingsUI();
-
-        }
-    );
-
-}
-
-
-function disconnectESP32() {
-
-    if (
-        RIK.reconnectTimer
-    ) {
-
-        clearTimeout(
-            RIK.reconnectTimer
-        );
-
-
-        RIK.reconnectTimer =
-            null;
-
-    }
-
-
-    stopHeartbeat();
-
-
-    if (RIK.socket) {
-
-        try {
-
-            RIK.socket.close();
-
-        } catch (_) {}
-
-    }
-
-
-    RIK.socket =
-        null;
-
-
-    RIK.connected =
-        false;
-
-
-    stopDrive(
-        false
-    );
-
-
-    updateConnectionUI();
-
-}
-
-
-function scheduleReconnect() {
-
-    if (
-        RIK.reconnectTimer
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        !getESP32URL()
-    ) {
-
-        return;
-
-    }
-
-
-    RIK.reconnectTimer =
-        setTimeout(
-            () => {
-
-                RIK.reconnectTimer =
-                    null;
-
-
-                connectESP32();
-
-
-                RIK.reconnectDelay =
-                    Math.min(
-                        RIK.reconnectDelay * 1.8,
-                        RIK.maxReconnectDelay
-                    );
-
-            },
-            RIK.reconnectDelay
-        );
-
-}
-
-
-function startHeartbeat() {
-
-    stopHeartbeat();
-
-
-    RIK.heartbeatTimer =
-        setInterval(
-            () => {
-
-                if (
-                    !RIK.connected
-                ) {
-
-                    return;
-
-                }
-
-
-                sendPacket({
-
-                    type:
-                        "heartbeat",
-
-                    timestamp:
-                        Date.now()
-
-                });
-
-            },
-            5000
-        );
-
-}
-
-
-function stopHeartbeat() {
-
-    if (
-        RIK.heartbeatTimer
-    ) {
-
-        clearInterval(
-            RIK.heartbeatTimer
-        );
-
-
-        RIK.heartbeatTimer =
-            null;
-
-    }
-
-}
-
-
-/* =========================================================
-   SEND PACKET
-   ========================================================= */
-
-function sendPacket(
-    packet
-) {
-
-    if (
-        !RIK.socket ||
-        RIK.socket.readyState !==
-            WebSocket.OPEN
-    ) {
-
-        return false;
-
-    }
-
-
-    try {
-
-        RIK.socket.send(
-            JSON.stringify(
-                packet
-            )
-        );
-
-
-        return true;
-
-    } catch (error) {
-
-        console.error(
-            "RIK send error:",
-            error
-        );
-
-
-        return false;
-
-    }
-
-}
-
-
-/* =========================================================
-   ROBOT COMMAND PROTOCOL
-   ========================================================= */
-
-function sendCommand(
-    command
-) {
-
-    if (
-        !RIK.connected
-    ) {
-
-        console.warn(
-            "RIK: ESP32 is offline."
-        );
-
-        return false;
-
-    }
-
-
-    RIK.commandId++;
-
-
-    const packet = {
-
-        type:
-            "command",
-
-        id:
-            RIK.commandId,
-
-        command,
-
-        speed:
-            RIK.speed,
-
-        timestamp:
-            Date.now()
-
-    };
-
-
-    console.log(
-        "RIK → ESP32:",
-        packet
-    );
-
-
-    return sendPacket(
-        packet
-    );
-
-}
-
-
-/* =========================================================
-   RECEIVE ESP32 DATA
-   ========================================================= */
-
-function handleESP32Message(
-    raw
-) {
-
-    let data;
-
-
-    try {
-
-        data =
-            JSON.parse(
-                raw
-            );
-
-    } catch (_) {
-
-        console.warn(
-            "RIK: Non-JSON ESP32 message:",
-            raw
-        );
-
-        return;
-
-    }
-
-
-    console.log(
-        "RIK ← ESP32:",
-        data
-    );
-
-
-    if (
-        data.type ===
-        "telemetry"
-    ) {
-
-        updateTelemetry(
-            data
-        );
-
-    }
-
-
-    if (
-        data.type ===
-        "status"
-    ) {
-
-        updateTelemetry(
-            data
-        );
-
-    }
-
-
-    if (
-        data.type ===
-        "ack"
-    ) {
-
-        console.log(
-            "RIK: Command acknowledged:",
-            data
-        );
-
-    }
-
-}
-
-
-function updateTelemetry(
-    data
-) {
-
-    /*
-     * Soil moisture
-     */
-
-    const soil =
-        data.soil ??
-        data.soilMoisture;
-
-
-    if (
-        soil !== undefined
-    ) {
-
-        const elements = [
-
-            $("#soilValue"),
-
-            $("#islandSoilValue")
-
-        ];
-
-
-        elements.forEach(
-            element => {
-
-                if (element) {
-
-                    element.textContent =
-                        `${soil}%`;
-
-                }
-
-            }
-        );
-
-    }
-
-
-    /*
-     * Air quality
-     */
-
-    const air =
-        data.air ??
-        data.mq135 ??
-        data.aqi;
-
-
-    if (
-        air !== undefined
-    ) {
-
-        const elements = [
-
-            $("#airValue"),
-
-            $("#islandAirValue")
-
-        ];
-
-
-        elements.forEach(
-            element => {
-
-                if (element) {
-
-                    element.textContent =
-                        air;
-
-                }
-
-            }
-        );
-
-    }
-
-
-    /*
-     * RSSI
-     */
-
-    if (
-        data.rssi !== undefined
-    ) {
-
-        const signal =
-            $("#signalValue");
-
-
-        if (signal) {
-
-            signal.textContent =
-                `${data.rssi} dBm`;
-
-        }
-
-    }
-
-}
-
-
-/* =========================================================
-   MOVEMENT
-   ========================================================= */
-
-function startDrive(
-    command
-) {
-
-    if (
-        !RIK.connected
-    ) {
-
-        return;
-
-    }
-
-
-    RIK.driveCommand =
-        command;
-
-
-    updateDriveUI(
-        command
-    );
-
-
-    sendCommand(
-        command
-    );
-
-}
-
-
-function stopDrive(
-    sendToESP = true
-) {
-
-    const wasMoving =
-        Boolean(
-            RIK.driveCommand
-        );
-
-
-    RIK.driveCommand =
-        null;
-
-
-    updateDriveUI(
-        null
-    );
-
-
-    if (
-        sendToESP &&
-        wasMoving &&
-        RIK.connected
-    ) {
-
-        sendCommand(
-            "STOP"
-        );
-
-    }
-
-}
-
-
-function updateDriveUI(
-    command
-) {
-
-    const driveState =
-        $("#driveState");
-
-
-    if (driveState) {
-
-        driveState.textContent =
-            command ||
-            "STOPPED";
-
-    }
-
-
-    $$(".control-button, .rik-pearl-button")
-        .forEach(
-            button => {
-
-                const active =
-                    command &&
-                    button.dataset.command ===
-                        command;
-
-
-                button.classList.toggle(
-                    "command-active",
-                    Boolean(
-                        active
-                    )
-                );
-
-            }
-        );
-
-}
-
-
-/* =========================================================
-   MOVEMENT BUTTONS
-   ========================================================= */
-
-function setupMovementButtons() {
-
-    const buttons =
-        $(
-            ".control-button, .movement-button"
-        );
-
-
-    const movementButtons =
-        buttons
-            ? [ ...$(
-                ".control-button, .movement-button"
-            ) ]
-            : [];
-
-
-    movementButtons.forEach(
-        button => {
-
-            const command =
-                button.dataset.command;
-
-
-            if (!command) {
-
-                return;
-
-            }
-
-
-            let held =
-                false;
-
-
-            button.addEventListener(
-                "pointerdown",
-                event => {
-
-                    event.preventDefault();
-
-
-                    if (
-                        held
-                    ) {
-
-                        return;
-
-                    }
-
-
-                    held =
-                        true;
-
-
-                    button.classList.add(
-                        "pressed"
-                    );
-
-
-                    startDrive(
-                        command
-                    );
-
-                }
-            );
-
-
-            button.addEventListener(
-                "pointerup",
-                event => {
-
-                    event.preventDefault();
-
-
-                    if (!held) {
-
-                        return;
-
-                    }
-
-
-                    held =
-                        false;
-
-
-                    button.classList.remove(
-                        "pressed"
-                    );
-
-
-                    stopDrive();
-
-                }
-            );
-
-
-            button.addEventListener(
-                "pointercancel",
-                () => {
-
-                    held =
-                        false;
-
-
-                    button.classList.remove(
-                        "pressed"
-                    );
-
-
-                    stopDrive();
-
-                }
-            );
-
-
-            button.addEventListener(
-                "pointerleave",
-                () => {
-
-                    if (
-                        held
-                    ) {
-
-                        held =
-                            false;
-
-
-                        button.classList.remove(
-                            "pressed"
-                        );
-
-
-                        stopDrive();
-
-                    }
-
-                }
-            );
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   ARM & CLAW
-   ========================================================= */
-
-function setupArmClaw() {
-
-    $$(".action-button")
-        .forEach(
-            button => {
-
-                const command =
-                    button.dataset.command;
-
-
-                if (!command) {
-
-                    return;
-
-                }
-
-
-                button.addEventListener(
-                    "click",
-                    event => {
-
-                        event.preventDefault();
-
-
-                        if (
-                            !RIK.connected
-                        ) {
-
-                            return;
-
-                        }
-
-
-                        sendCommand(
-                            command
-                        );
-
-
-                        button.classList.add(
-                            "pressed"
-                        );
-
-
-                        setTimeout(
-                            () => {
-
-                                button.classList.remove(
-                                    "pressed"
-                                );
-
-                            },
-                            180
-                        );
-
-
-                        updateArmClawState(
-                            command
-                        );
-
-                    }
-                );
-
-            }
-        );
-
-}
-
-
-function updateArmClawState(
-    command
-) {
-
-    if (
-        command ===
-        "ARM_UP"
-    ) {
-
-        RIK.armState =
-            "ARM UP";
-
-    }
-
-
-    if (
-        command ===
-        "ARM_DOWN"
-    ) {
-
-        RIK.armState =
-            "ARM DOWN";
-
-    }
-
-
-    if (
-        command ===
-        "OPEN"
-    ) {
-
-        RIK.clawState =
-            "OPEN";
-
-    }
-
-
-    if (
-        command ===
-        "CLOSE"
-    ) {
-
-        RIK.clawState =
-            "CLOSED";
-
-    }
-
-
-    const arm =
-        $("#armPosition");
-
-
-    if (arm) {
-
-        arm.textContent =
-            RIK.armState;
-
-    }
-
-
-    const claw =
-        $("#clawPosition");
-
-
-    if (claw) {
-
-        claw.textContent =
-            RIK.clawState;
-
-    }
-
-}
-
-
-/* =========================================================
-   SPEED
-   ========================================================= */
-
-function setupSpeed() {
-
-    const slider =
-        $("#speedSlider");
-
-
-    const value =
-        $("#speedValue");
-
-
-    if (!slider) {
-
-        return;
-
-    }
-
-
-    RIK.speed =
-        Number(
-            slider.value
-        ) || 65;
-
-
-    function update() {
-
-        RIK.speed =
-            Number(
-                slider.value
-            );
-
-
-        if (value) {
-
-            value.textContent =
-                `${RIK.speed}%`;
-
-        }
-
-    }
-
-
-    slider.addEventListener(
-        "input",
-        update
-    );
-
-
-    update();
-
-}
-
-
-/* =========================================================
-   KEYBOARD CONTROL
-   ========================================================= */
-
-function setupKeyboard() {
-
-    const commands = {
-
-        ArrowUp:
-            "FORWARD",
-
-        ArrowDown:
-            "BACKWARD",
-
-        ArrowLeft:
-            "LEFT",
-
-        ArrowRight:
-            "RIGHT"
-
-    };
-
-
-    document.addEventListener(
-        "keydown",
-        event => {
-
-            const command =
-                commands[
-                    event.key
-                ];
-
-
-            if (!command) {
-
-                return;
-
-            }
-
-
-            const active =
-                document.activeElement;
-
-
-            if (
-                active &&
-                (
-                    active.tagName ===
-                        "INPUT" ||
-
-                    active.tagName ===
-                        "TEXTAREA"
-                )
-            ) {
-
-                return;
-
-            }
-
-
-            if (
-                event.repeat
-            ) {
-
-                return;
-
-            }
-
-
-            event.preventDefault();
-
-
-            startDrive(
-                command
-            );
-
-        }
-    );
-
-
-    document.addEventListener(
-        "keyup",
-        event => {
-
-            if (
-                commands[
-                    event.key
-                ]
-            ) {
-
-                event.preventDefault();
-
-
-                stopDrive();
-
-            }
-
-        }
-    );
-
-}
-
-
-/* =========================================================
-   SAFETY
-   ========================================================= */
-
-function setupSafety() {
-
-    window.addEventListener(
-        "blur",
+    settingsButton?.addEventListener(
+        "click",
         () => {
 
             stopDrive();
 
+
+            if (controlPage) {
+
+                controlPage.style.display =
+                    "none";
+
+            }
+
+
+            if (settingsPage) {
+
+                settingsPage.style.display =
+                    "";
+
+            }
+
+
+            createESP32Settings();
+
         }
     );
 
 
-    document.addEventListener(
-        "visibilitychange",
+    backButton?.addEventListener(
+        "click",
         () => {
 
-            RIK.pageHidden =
-                document.hidden;
+            if (settingsPage) {
 
-
-            if (
-                document.hidden
-            ) {
-
-                stopDrive();
+                settingsPage.style.display =
+                    "none";
 
             }
+
+
+            if (controlPage) {
+
+                controlPage.style.display =
+                    "";
+
+            }
+
+
+            requestAutoFit();
 
         }
     );
 
 
-    document.addEventListener(
-        "keydown",
-        event => {
+    /*
+     * Create it now if the page exists.
+     */
 
-            if (
-                event.key ===
-                "Escape"
-            ) {
-
-                stopDrive();
-
-            }
-
-        }
-    );
+    createESP32Settings();
 
 }
 
 
-/* =========================================================
+/* ============================================================
    TIMER
-   ========================================================= */
+   ============================================================ */
 
 function setupTimer() {
 
-    const timerButton =
+    const button =
         $("#timerButton");
 
 
@@ -2299,23 +3402,20 @@ function setupTimer() {
         }
 
 
-        const displays =
-            $$(".timer-value");
+        $$(".timer-value")
+            .forEach(
+                element => {
 
+                    element.textContent =
+                        formatted;
 
-        displays.forEach(
-            element => {
-
-                element.textContent =
-                    formatted;
-
-            }
-        );
+                }
+            );
 
     }
 
 
-    timerButton?.addEventListener(
+    button?.addEventListener(
         "click",
         () => {
 
@@ -2372,10 +3472,10 @@ function setupTimer() {
 
 
             const secs =
-                Math.max(
-                    0,
-                    Math.min(
-                        59,
+                Math.min(
+                    59,
+                    Math.max(
+                        0,
                         Number(
                             seconds?.value
                         ) || 0
@@ -2389,8 +3489,7 @@ function setupTimer() {
 
 
             if (
-                RIK.timerSeconds <=
-                0
+                !RIK.timerSeconds
             ) {
 
                 return;
@@ -2417,7 +3516,6 @@ function setupTimer() {
 
                         RIK.timerSeconds--;
 
-
                         render();
 
 
@@ -2435,7 +3533,7 @@ function setupTimer() {
                                 null;
 
 
-                            timerFinished();
+                            stopDrive();
 
                         }
 
@@ -2475,702 +3573,118 @@ function setupTimer() {
 }
 
 
-function timerFinished() {
+/* ============================================================
+   RESPONSIVE / SELF-ADJUSTING ENGINE
+   ============================================================ */
 
-    /*
-     * Stop robot when timer finishes.
-     */
+function requestAutoFit() {
 
-    stopDrive();
-
-
-    /*
-     * Browser notification/sound can
-     * be added later.
-     */
-
-    console.log(
-        "RIK: TIMER FINISHED"
+    cancelAnimationFrame(
+        RIK.resizeTimer
     );
+
+
+    RIK.resizeTimer =
+        requestAnimationFrame(
+            () => {
+
+                autoFitControls();
+
+            }
+        );
 
 }
 
 
-/* =========================================================
-   PEARL BUTTON EFFECT
-   ---------------------------------------------------------
-   Keeps existing buttons and upgrades them.
-   ========================================================= */
-
-function setupPearlButtons() {
-
-    if (
-        $("#rik-pearl-style")
-    ) {
-
-        return;
-
-    }
-
-
-    const style =
-        document.createElement(
-            "style"
-        );
-
-
-    style.id =
-        "rik-pearl-style";
-
-
-    style.textContent = `
-
-        .control-button,
-        .movement-button,
-        .action-button {
-
-            position: relative;
-
-            overflow: hidden;
-
-            isolation: isolate;
-
-            cursor: pointer;
-
-            transition:
-                transform .18s ease,
-                box-shadow .18s ease,
-                filter .18s ease;
-
-        }
-
-
-        .control-button::before,
-        .movement-button::before,
-        .action-button::before {
-
-            content: "";
-
-            position: absolute;
-
-            left: 6%;
-
-            right: 6%;
-
-            top: 8%;
-
-            height: 42%;
-
-            border-radius:
-                999px 999px 35% 35%;
-
-            background:
-                linear-gradient(
-                    180deg,
-                    rgba(255,255,255,.42),
-                    rgba(255,255,255,.08),
-                    transparent
-                );
-
-            pointer-events: none;
-
-            z-index: -1;
-
-            transition:
-                transform .25s ease,
-                opacity .25s ease;
-
-        }
-
-
-        .control-button::after,
-        .movement-button::after,
-        .action-button::after {
-
-            content: "";
-
-            position: absolute;
-
-            width: 130%;
-
-            height: 100%;
-
-            left: -15%;
-
-            bottom: -65%;
-
-            border-radius: 50%;
-
-            background:
-                rgba(255,255,255,.09);
-
-            pointer-events: none;
-
-            z-index: -1;
-
-            transition:
-                transform .3s ease;
-
-        }
-
-
-        .control-button:hover,
-        .movement-button:hover,
-        .action-button:hover {
-
-            transform:
-                translateY(-2px);
-
-            filter:
-                brightness(1.08);
-
-        }
-
-
-        .control-button:hover::before,
-        .movement-button:hover::before,
-        .action-button:hover::before {
-
-            transform:
-                translateY(-6%);
-
-        }
-
-
-        .control-button:hover::after,
-        .movement-button:hover::after,
-        .action-button:hover::after {
-
-            transform:
-                translateY(-7%);
-
-        }
-
-
-        .control-button:active,
-        .movement-button:active,
-        .action-button:active,
-        .control-button.pressed,
-        .movement-button.pressed,
-        .action-button.pressed,
-        .command-active {
-
-            transform:
-                translateY(3px)
-                scale(.985);
-
-            filter:
-                brightness(1.18);
-
-        }
-
-
-        .control-button.pressed::before,
-        .movement-button.pressed::before,
-        .action-button.pressed::before {
-
-            opacity:
-                .65;
-
-        }
-
-    `;
-
-
-    document.head.appendChild(
-        style
-    );
-
-}
-
-
-/* =========================================================
-   ANIMATED BENDING BACKGROUND
-   ---------------------------------------------------------
-   IMPORTANT:
-   This is the background we were building.
-
-   It uses ONE SVG with multiple paths instead of
-   dozens of DOM elements.
-
-   This keeps the animation lightweight.
-   ========================================================= */
-
-function createAnimatedBackground() {
-
-    /*
-     * Don't duplicate it.
-     */
-
-    if (
-        $("#rikFlowBackground")
-    ) {
-
-        return;
-
-    }
-
-
-    const style =
-        document.createElement(
-            "style"
-        );
-
-
-    style.textContent = `
-
-        #rikFlowBackground {
-
-            position:
-                fixed;
-
-            inset:
-                0;
-
-            width:
-                100%;
-
-            height:
-                100%;
-
-            z-index:
-                0;
-
-            pointer-events:
-                none;
-
-            overflow:
-                hidden;
-
-            background:
-                #000;
-
-        }
-
-
-        #rikFlowBackground svg {
-
-            position:
-                absolute;
-
-            width:
-                125%;
-
-            height:
-                125%;
-
-            left:
-                -12.5%;
-
-            top:
-                -12.5%;
-
-            overflow:
-                visible;
-
-        }
-
-
-        #rikFlowBackground
-        .flow-line {
-
-            fill:
-                none;
-
-            stroke:
-                rgba(180,190,205,.28);
-
-            stroke-width:
-                0.8;
-
-            vector-effect:
-                non-scaling-stroke;
-
-            stroke-linecap:
-                round;
-
-            stroke-dasharray:
-                900 1400;
-
-            animation:
-                rikFlow
-                18s
-                linear
-                infinite;
-
-            will-change:
-                stroke-dashoffset;
-
-        }
-
-
-        #rikFlowBackground
-        .flow-line:nth-child(2n) {
-
-            animation-duration:
-                22s;
-
-        }
-
-
-        #rikFlowBackground
-        .flow-line:nth-child(3n) {
-
-            animation-duration:
-                27s;
-
-        }
-
-
-        #rikFlowBackground
-        .flow-line:nth-child(4n) {
-
-            animation-duration:
-                31s;
-
-        }
-
-
-        #rikFlowBackground
-        .flow-line.bright {
-
-            stroke:
-                rgba(220,225,235,.45);
-
-            stroke-width:
-                1;
-
-        }
-
-
-        @keyframes rikFlow {
-
-            from {
-
-                stroke-dashoffset:
-                    0;
-
-            }
-
-            to {
-
-                stroke-dashoffset:
-                    -2300px;
-
-            }
-
-        }
-
-
-        /*
-         * When tab is hidden:
-         * remove animation work.
-         */
-
-        body.rik-tab-hidden
-        #rikFlowBackground
-        .flow-line {
-
-            animation-play-state:
-                paused;
-
-        }
-
-
-        /*
-         * Make sure your actual UI
-         * remains ABOVE the lines.
-         */
-
-        body > *:not(#rikFlowBackground) {
-
-            position:
-                relative;
-
-            z-index:
-                1;
-
-        }
-
-
-        /*
-         * Existing main containers
-         * should stay above background.
-         */
-
-        main,
-        #app,
-        #root,
-        .app,
-        .page,
-        .dashboard,
-        .controller,
-        .settings-page,
-        #controlPage,
-        #settingsPage {
-
-            position:
-                relative;
-
-            z-index:
-                1;
-
-        }
-
-    `;
-
-
-    document.head.appendChild(
-        style
-    );
-
-
-    const background =
-        document.createElement(
-            "div"
-        );
-
-
-    background.id =
-        "rikFlowBackground";
-
-
-    /*
-     * Large curved/bending paths.
-     *
-     * These intentionally bend toward
-     * the controller area instead of
-     * simply moving horizontally.
-     */
-
-    const paths = [
-
-        "M -300 80 C 80 40, 260 70, 430 180 S 780 410, 1450 360",
-
-        "M -300 110 C 60 70, 250 100, 440 210 S 800 440, 1450 390",
-
-        "M -300 145 C 40 105, 230 135, 450 245 S 810 470, 1450 425",
-
-        "M -300 180 C 30 145, 210 170, 460 280 S 820 500, 1450 460",
-
-        "M -300 220 C 40 180, 210 205, 470 315 S 830 530, 1450 500",
-
-        "M -300 265 C 60 220, 220 245, 480 350 S 850 560, 1450 535",
-
-        "M -300 315 C 80 260, 230 290, 490 390 S 870 590, 1450 570",
-
-        "M -300 370 C 90 310, 240 340, 500 430 S 890 620, 1450 610",
-
-        "M -300 430 C 100 370, 250 395, 510 470 S 910 655, 1450 650",
-
-        "M -300 495 C 110 430, 260 455, 520 515 S 930 690, 1450 695",
-
-        "M -300 560 C 120 495, 270 515, 530 560 S 950 720, 1450 740",
-
-        "M -300 630 C 120 555, 280 575, 540 610 S 970 750, 1450 790",
-
-        "M -300 705 C 130 620, 290 640, 550 665 S 990 785, 1450 835",
-
-        "M -300 780 C 140 690, 300 710, 560 720 S 1010 820, 1450 880",
-
-        "M -300 855 C 150 760, 310 780, 570 780 S 1030 860, 1450 925",
-
-        "M -300 930 C 160 830, 320 850, 580 840 S 1050 900, 1450 970"
-
-    ];
-
-
-    const svg =
-        document.createElementNS(
-            "http://www.w3.org/2000/svg",
-            "svg"
-        );
-
-
-    svg.setAttribute(
-        "viewBox",
-        "0 0 1400 1000"
-    );
-
-
-    svg.setAttribute(
-        "preserveAspectRatio",
-        "none"
-    );
-
-
-    paths.forEach(
-        (d, index) => {
-
-            const path =
-                document.createElementNS(
-                    "http://www.w3.org/2000/svg",
-                    "path"
-                );
-
-
-            path.setAttribute(
-                "d",
-                d
-            );
-
-
-            path.classList.add(
-                "flow-line"
-            );
-
-
-            if (
-                index === 0 ||
-                index === 7 ||
-                index === 14
-            ) {
-
-                path.classList.add(
-                    "bright"
-                );
-
-            }
-
-
-            /*
-             * Slightly different
-             * starting positions.
-             */
-
-            path.style.animationDelay =
-                `${-index * 1.25}s`;
-
-
-            svg.appendChild(
-                path
-            );
-
+function setupAutoFit() {
+
+    window.addEventListener(
+        "resize",
+        requestAutoFit,
+        {
+            passive: true
         }
     );
 
 
-    background.appendChild(
-        svg
-    );
-
-
-    /*
-     * Put background FIRST so all
-     * controls remain above it.
-     */
-
-    document.body.prepend(
-        background
-    );
-
-}
-
-
-/* =========================================================
-   SETTINGS NAVIGATION
-   ========================================================= */
-
-function setupSettingsNavigation() {
-
-    const settingsButton =
-        $("#settingsButton");
-
-
-    const settingsPage =
-        $("#settingsPage");
-
-
-    const controlPage =
-        $("#controlPage");
-
-
-    const backButton =
-        $("#settingsBackButton");
-
-
-    settingsButton?.addEventListener(
-        "click",
+    window.addEventListener(
+        "orientationchange",
         () => {
 
-            stopDrive();
+            setTimeout(
+                requestAutoFit,
+                100
+            );
 
-
-            if (controlPage) {
-
-                controlPage.style.display =
-                    "none";
-
-            }
-
-
-            if (settingsPage) {
-
-                settingsPage.style.display =
-                    "";
-
-            }
-
-
-            createESP32Settings();
-
+        },
+        {
+            passive: true
         }
     );
 
 
-    backButton?.addEventListener(
-        "click",
-        () => {
+    if (
+        window.visualViewport
+    ) {
 
-            if (settingsPage) {
-
-                settingsPage.style.display =
-                    "none";
-
+        window.visualViewport.addEventListener(
+            "resize",
+            requestAutoFit,
+            {
+                passive: true
             }
+        );
 
-
-            if (controlPage) {
-
-                controlPage.style.display =
-                    "";
-
-            }
-
-        }
-    );
+    }
 
 
     /*
-     * If Settings already starts
-     * visible, create the card now.
+     * ResizeObserver is more reliable
+     * when panels change because of
+     * browser UI / responsive layout.
      */
 
     if (
-        settingsPage &&
-        getComputedStyle(
-            settingsPage
-        ).display !==
-            "none"
+        "ResizeObserver" in window
     ) {
 
-        createESP32Settings();
+        const observer =
+            new ResizeObserver(
+                () => {
+
+                    requestAutoFit();
+
+                }
+            );
+
+
+        const root =
+            $(
+                ".movement-panel, .movement-controls, .drive-panel, #movementPanel"
+            );
+
+
+        if (root) {
+
+            observer.observe(
+                root
+            );
+
+        }
 
     }
+
+
+    requestAutoFit();
 
 }
 
 
-/* =========================================================
+/* ============================================================
    PERFORMANCE
-   ========================================================= */
+   ============================================================ */
 
 function setupPerformance() {
-
-    /*
-     * Pause background animation
-     * when browser tab isn't visible.
-     */
 
     document.addEventListener(
         "visibilitychange",
@@ -3185,57 +3699,269 @@ function setupPerformance() {
                 document.hidden
             );
 
+
+            if (
+                document.hidden
+            ) {
+
+                stopDrive();
+
+            }
+
         }
+    );
+
+
+    /*
+     * Respect reduced-motion preference.
+     */
+
+    if (
+        window.matchMedia
+    ) {
+
+        const reduced =
+            window.matchMedia(
+                "(prefers-reduced-motion: reduce)"
+            );
+
+
+        const update =
+            () => {
+
+                if (
+                    reduced.matches
+                ) {
+
+                    document.body.classList.add(
+                        "rik-reduced-motion"
+                    );
+
+                } else {
+
+                    document.body.classList.remove(
+                        "rik-reduced-motion"
+                    );
+
+                }
+
+            };
+
+
+        reduced.addEventListener?.(
+            "change",
+            update
+        );
+
+
+        update();
+
+    }
+
+
+    /*
+     * Reduced-motion CSS.
+     */
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+
+    style.id =
+        "rikPerformanceStyle";
+
+
+    style.textContent = `
+
+        body.rik-reduced-motion
+        #rikFlowBackground
+        .rik-flow {
+
+            animation:
+                none !important;
+
+        }
+
+
+        body.rik-reduced-motion
+        .control-button,
+        body.rik-reduced-motion
+        .action-button {
+
+            transition:
+                none !important;
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
     );
 
 }
 
 
-/* =========================================================
-   INITIALIZE
-   ========================================================= */
+/* ============================================================
+   FINAL RUNTIME CSS
+   ------------------------------------------------------------
+   The self-adjusting engine uses CSS variables so the existing
+   layout isn't destroyed.
+   ============================================================ */
 
-function initRIK() {
+function installRuntimeLayoutCSS() {
 
-    console.log(
-        "================================="
+    if (
+        $("#rikRuntimeLayoutStyle")
+    ) {
+
+        return;
+
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+
+    style.id =
+        "rikRuntimeLayoutStyle";
+
+
+    style.textContent = `
+
+        :root {
+
+            --rik-control-scale:
+                1;
+
+        }
+
+
+        /*
+         * Only scale the movement controls.
+         * The rest of the application remains untouched.
+         */
+
+        .movement-grid .control-button,
+        .movement-pad .control-button,
+        .direction-pad .control-button {
+
+            transform:
+                scale(
+                    var(--rik-control-scale)
+                );
+
+        }
+
+
+        .movement-grid .control-button:hover,
+        .movement-pad .control-button:hover,
+        .direction-pad .control-button:hover {
+
+            transform:
+                scale(
+                    var(--rik-control-scale)
+                )
+                translateY(-2px);
+
+        }
+
+
+        .movement-grid .control-button.pressed,
+        .movement-pad .control-button.pressed,
+        .direction-pad .control-button.pressed {
+
+            transform:
+                scale(
+                    calc(
+                        var(--rik-control-scale)
+                        * .985
+                    )
+                )
+                translateY(3px);
+
+        }
+
+
+        /*
+         * Prevent horizontal overflow on small screens.
+         */
+
+        body {
+
+            overflow-x:
+                hidden;
+
+        }
+
+
+        @media(max-width:600px) {
+
+            .rik-esp32-status-row {
+
+                flex-direction:
+                    column;
+
+            }
+
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
     );
 
+}
+
+
+/* ============================================================
+   INITIALIZE
+   ============================================================ */
+
+function initRIK() {
 
     console.log(
         "RIK — ROBOT IN KONTROL"
     );
 
 
-    console.log(
-        "Initializing..."
-    );
-
-
-    console.log(
-        "================================="
-    );
+    loadRIKSettings();
 
 
     /*
-     * BACKGROUND FIRST.
-     *
-     * This restores the flowing
-     * bending lines.
+     * Background first.
      */
 
-    createAnimatedBackground();
+    installFlowBackground();
 
 
     /*
-     * Pearl effects.
+     * Pearl visual layer.
      */
 
-    setupPearlButtons();
+    installPearlStyles();
 
 
     /*
-     * Controls.
+     * Responsive system.
+     */
+
+    installRuntimeLayoutCSS();
+
+
+    setupAutoFit();
+
+
+    /*
+     * Main controls.
      */
 
     setupMovementButtons();
@@ -3248,10 +3974,14 @@ function initRIK() {
 
 
     /*
-     * Safety.
+     * Feedback/settings.
      */
 
-    setupSafety();
+    setupButtonSize();
+
+    setupHapticToggle();
+
+    setupAmbientToggle();
 
 
     /*
@@ -3263,64 +3993,47 @@ function initRIK() {
 
     /*
      * Settings.
-     */
 
-    createESP32Settings();
+     */
 
     setupSettingsNavigation();
 
 
     /*
      * Performance.
+
      */
 
     setupPerformance();
 
 
     /*
-     * Initial connection state.
+     * Initial state.
      */
-
-    RIK.connected =
-        false;
-
 
     updateConnectionUI();
 
 
     /*
-     * Connect automatically if
+     * Automatically connect if
      * an ESP32 IP was already saved.
      */
 
-    const settings =
+    const saved =
         getESP32Settings();
 
 
     if (
-        settings.ip
+        saved.ip
     ) {
 
-        console.log(
-            "RIK: Saved ESP32:",
-            `${settings.ip}:${settings.port}`
-        );
-
-
         connectESP32();
-
-    } else {
-
-        console.log(
-            "RIK: No ESP32 IP configured."
-        );
 
     }
 
 
     /*
-     * Expose useful functions
-     * for debugging.
+     * Public debugging API.
      */
 
     window.RIK = {
@@ -3347,6 +4060,13 @@ function initRIK() {
     };
 
 
+    /*
+     * First layout calculation.
+     */
+
+    requestAutoFit();
+
+
     console.log(
         "RIK: READY"
     );
@@ -3354,9 +4074,9 @@ function initRIK() {
 }
 
 
-/* =========================================================
-   START
-   ========================================================= */
+/* ============================================================
+   START APP
+   ============================================================ */
 
 if (
     document.readyState ===
